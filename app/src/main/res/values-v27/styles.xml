@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="HalChatAndroidThemeDark" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- Customize your light theme here. -->
+        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+        <item name="android:fontFamily">@font/robotocondensed</item>
+        <item name="fontFamily">@font/robotocondensed</item>
+        <item name="android:textSize">@dimen/standardText</item>
+        <item name="colorPrimary">@color/backgroundToolbar</item>
+        <item name="colorPrimaryDark">@color/backgroundToolbar</item>
+        <item name="colorAccent">@color/textColor</item>
+        <item name="android:windowBackground">@drawable/gradient_background_selector</item>
+        <item name="background">@drawable/gradient_background_selector</item>
+        <item name="materialButtonStyle">@style/button</item>
+        <item name="spinnerStyle">@style/spinner</item>
+        <item name="android:dropDownSpinnerStyle">@style/spinner</item>
+        <item name="android:spinnerStyle">@style/spinner</item>
+        <item name="android:spinnerMode">dropdown</item>
+        <item name="android:textViewStyle">@style/textview</item>
+        <item name="android:editTextStyle">@style/edittext</item>
+        <item name="editTextStyle">@style/edittext</item>
+        <item name="android:progressBarStyle">@style/progressbar</item>
+        <item name="android:progressBarStyleHorizontal">@style/progressbar</item>
+        <item name="android:radioButtonStyle">@style/radiobutton</item>
+        <item name="radioButtonStyle">@style/radiobutton</item>
+        <item name="android:seekBarStyle">@style/seekbar</item>
+        <item name="seekBarStyle">@style/seekbar</item>
+        <item name="chipStyle">@style/chipchoice</item>
+        <item name="android:switchStyle">@style/switchbtn</item>
+        <item name="switchStyle">@style/switchbtn</item>
+        <item name="materialSwitchStyle">@style/switchbtn</item>
+    </style>
+</resources>

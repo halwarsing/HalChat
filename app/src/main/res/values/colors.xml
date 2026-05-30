@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="background">#252525</color>
+    <color name="backgroundToolbar">#8c0f1014</color>
+    <color name="secondBackground">#16181f</color>
+    <color name="thirdBackground">#1b1f27</color>
+    <color name="backgroundInput">#A61f2230</color>
+    <color name="hcStroke">#1FFFFFFF</color>
+    <color name="disabledBtn">#222222</color>
+    <color name="textColor">#FFFFFF</color>
+    <color name="textHintColor">#C8C8C8</color>
+    <color name="transparent">#00000000</color>
+    <color name="accientBackground">#4A90E2</color>
+    <color name="fourthBackground">#1F2230</color>
+    <color name="accent1">#ff2fb9</color>
+    <color name="accent2">#6a5cff</color>
+</resources>

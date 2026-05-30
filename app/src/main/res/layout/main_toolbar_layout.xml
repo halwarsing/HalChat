@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.appcompat.widget.Toolbar xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/toolbar"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/backgroundToolbar"
+    android:minHeight="?attr/actionBarSize"
+    android:theme="@style/ThemeOverlay.AppCompat.Dark"
+    app:popupTheme="@style/ThemeOverlay.AppCompat.Light"
+    app:contentInsetStart="0dp"
+    app:contentInsetLeft="0dp"
+    app:contentInsetRight="0dp"
+    app:contentInsetEnd="0dp"
+    android:paddingStart="0dp"
+    android:paddingLeft="0dp"
+    android:paddingEnd="0dp"
+    android:paddingRight="0dp">
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+        <ImageButton
+            android:id="@+id/toolbar_menu"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/menu_ic_desc"
+            android:paddingLeft="0dp"
+            android:paddingTop="2dp"
+            android:paddingRight="0dp"
+            android:paddingBottom="2dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_menu"
+            android:layout_marginStart="5dp" />
+
+        <TextView
+            android:id="@+id/toolbar_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="@string/service_name"
+            android:textColor="@color/textColor"
+            android:textSize="20sp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <ImageButton
+            android:id="@+id/toolbar_notification"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:paddingTop="9dp"
+            android:paddingBottom="9dp"
+            android:paddingLeft="9.75dp"
+            android:paddingRight="9.75dp"
+            android:src="@drawable/ic_notification"
+            android:layout_marginEnd="5dp"
+            android:scaleType="fitCenter"
+            android:contentDescription="@string/notification_ic_desc"
+            android:background="?attr/selectableItemBackgroundBorderless"/>
+
+    </LinearLayout>
+</androidx.appcompat.widget.Toolbar>

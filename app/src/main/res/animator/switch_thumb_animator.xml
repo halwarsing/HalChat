@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- при состоянии checked=true анимируем thumbPosition от 0 до 1 -->
+    <item android:state_checked="true">
+        <objectAnimator
+            android:propertyName="thumbPosition"
+            android:duration="250"
+            android:valueFrom="0"
+            android:valueTo="1"
+            android:valueType="floatType"/>
+    </item>
+    <!-- при любом другом состоянии (unchecked) — обратно -->
+    <item>
+        <objectAnimator
+            android:propertyName="thumbPosition"
+            android:duration="250"
+            android:valueFrom="1"
+            android:valueTo="0"
+            android:valueType="floatType"/>
+    </item>
+</selector>

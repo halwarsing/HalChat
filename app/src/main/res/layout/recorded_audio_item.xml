@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<halwarsing.net.halchatandroid.views.RecordedAudioView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:orientation="horizontal"
+    android:layout_width="wrap_content"
+    android:layout_height="60dp"
+    android:padding="10dp"
+    android:background="@drawable/round_background">
+    <ImageButton
+        android:id="@+id/playPauseBtn"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:src="@drawable/ic_play"
+        android:scaleType="fitCenter"
+        android:background="@color/transparent"/>
+    <LinearLayout
+        android:id="@+id/wavesDiv"
+        android:layout_width="244dp"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:layout_marginStart="5dp">
+
+        <halwarsing.net.halchatandroid.views.WaveformView
+            android:id="@+id/waves"
+            android:layout_width="match_parent"
+            android:layout_height="15dp"
+            android:layout_marginTop="2dp" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/textViewTimespanAudio"
+            android:text="@string/zero_timespan"
+            android:textSize="@dimen/smallText"
+            android:layout_marginTop="1dp"/>
+    </LinearLayout>
+</halwarsing.net.halchatandroid.views.RecordedAudioView>

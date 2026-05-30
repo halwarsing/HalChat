@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="button2" parent="Widget.AppCompat.Button">
+        <item name="android:gravity">center_vertical|center_horizontal</item>
+        <item name="android:textColor">@color/textColor</item>
+        <item name="android:textSize">@dimen/standardText</item>
+        <item name="android:background">@drawable/round_btn</item>
+        <item name="background">@drawable/round_btn</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+        <item name="textAllCaps">false</item>
+    </style>
+
+    <style name="button" parent="Widget.MaterialComponents.Button">
+        <item name="android:gravity">center_vertical|center_horizontal</item>
+        <item name="android:textColor">@color/textColor</item>
+        <item name="android:textSize">@dimen/standardText</item>
+        <item name="android:background">@drawable/round_btn</item>
+        <item name="background">@drawable/round_btn</item>
+        <item name="backgroundTint">@null</item>
+        <item name="android:backgroundTint">@null</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+        <item name="textAllCaps">false</item>
+    </style>
+
+    <style name="spinner" parent="Widget.AppCompat.Spinner.DropDown">
+        <item name="android:spinnerMode">dropdown</item>
+        <item name="android:background">@drawable/round_select</item>
+        <item name="android:paddingTop">5dp</item>
+        <item name="android:paddingBottom">5dp</item>
+    </style>
+
+    <style name="textview" parent="Widget.AppCompat.TextView">
+        <item name="android:textColor">@color/textColor</item>
+        <item name="android:textSize">@dimen/standardText</item>
+    </style>
+
+    <style name="edittext" parent="Widget.AppCompat.EditText">
+        <item name="android:textColor">@color/textColor</item>
+        <item name="android:textColorHint">@color/textHintColor</item>
+        <item name="android:textSize">@dimen/standardText</item>
+        <item name="android:paddingStart">10dp</item>
+        <item name="android:paddingEnd">10dp</item>
+        <item name="android:paddingTop">5dp</item>
+        <item name="android:paddingBottom">5dp</item>
+        <item name="android:background">@drawable/round_input</item>
+    </style>
+
+    <style name="progressbar" parent="Widget.AppCompat.ProgressBar.Horizontal">
+        <item name="android:indeterminate">true</item>
+        <item name="minWidth">48dip</item>
+        <item name="maxWidth">48dip</item>
+        <item name="minHeight">48dip</item>
+        <item name="maxHeight">48dip</item>
+        <item name="android:progressDrawable">@drawable/progress_bar_value</item>
+        <item name="android:indeterminateDrawable">@drawable/progress_bar_value</item>
+    </style>
+
+    <style name="radiobutton" parent="Widget.AppCompat.CompoundButton.RadioButton">
+        <item name="android:textColor">@color/textColor</item>
+        <item name="android:textSize">@dimen/standardText</item>
+    </style>
+    
+    <style name="seekbar" parent="Widget.AppCompat.SeekBar">
+        <item name="android:progress">@integer/material_motion_duration_long_1</item>
+        <item name="android:progressDrawable">@drawable/seekbar_style</item>
+        <item name="android:thumb">@drawable/custom_thumb</item>
+    </style>
+
+    <style name="chipchoice" parent="Widget.MaterialComponents.Chip.Choice">
+        <item name="chipBackgroundColor">@drawable/chip_background_color</item>
+        <item name="chipStrokeColor">@drawable/chip_stroke_color</item>
+        <item name="chipStrokeWidth">1dp</item>
+        <item name="android:textColor">@color/textColor</item>
+    </style>
+
+    <style name="switchbtn" parent="Widget.Material3.CompoundButton.MaterialSwitch">
+        <item name="useMaterialThemeColors">false</item>
+        <item name="enforceMaterialTheme">false</item>
+        <item name="android:track">@drawable/switch_bg</item>
+        <item name="track">@drawable/switch_bg</item>
+        <item name="android:thumb">@drawable/switch_thumb</item>
+        <item name="showText">false</item>
+        <item name="android:showText">false</item>
+        <item name="android:stateListAnimator">@animator/switch_thumb_animator</item>
+    </style>
+
+    <style name="HalChatAndroidThemeDark" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- Customize your light theme here. -->
+        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+        <item name="android:fontFamily">@font/robotocondensed</item>
+        <item name="fontFamily">@font/robotocondensed</item>
+        <item name="android:textSize">@dimen/standardText</item>
+        <item name="colorPrimary">@color/backgroundToolbar</item>
+        <item name="colorPrimaryDark">@color/backgroundToolbar</item>
+        <item name="colorAccent">@color/textColor</item>
+        <item name="android:windowBackground">@drawable/gradient_background_selector</item>
+        <item name="background">@drawable/gradient_background_selector</item>
+        <item name="materialButtonStyle">@style/button</item>
+        <item name="buttonStyle">@style/button</item>
+        <item name="spinnerStyle">@style/spinner</item>
+        <item name="android:dropDownSpinnerStyle">@style/spinner</item>
+        <item name="android:spinnerStyle">@style/spinner</item>
+        <item name="android:spinnerMode">dropdown</item>
+        <item name="android:textViewStyle">@style/textview</item>
+        <item name="android:editTextStyle">@style/edittext</item>
+        <item name="editTextStyle">@style/edittext</item>
+        <item name="android:progressBarStyle">@style/progressbar</item>
+        <item name="android:progressBarStyleHorizontal">@style/progressbar</item>
+        <item name="android:radioButtonStyle">@style/radiobutton</item>
+        <item name="radioButtonStyle">@style/radiobutton</item>
+        <item name="android:seekBarStyle">@style/seekbar</item>
+        <item name="seekBarStyle">@style/seekbar</item>
+        <item name="chipStyle">@style/chipchoice</item>
+        <item name="android:switchStyle">@style/switchbtn</item>
+        <item name="switchStyle">@style/switchbtn</item>
+        <item name="materialSwitchStyle">@style/switchbtn</item>
+    </style>
+</resources>

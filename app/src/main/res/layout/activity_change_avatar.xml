@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".main.ChangeAvatarActivity"
+    android:orientation="vertical"
+    android:gravity="center_horizontal">
+    <include layout="@layout/back_toolbar_layout"/>
+    <androidx.cardview.widget.CardView
+        android:id="@+id/iconDiv"
+        android:layout_width="300dp"
+        android:layout_height="300dp"
+        android:layout_marginTop="10dp"
+        app:cardCornerRadius="300dp"
+        android:focusable="true"
+        android:clickable="true">
+        <halwarsing.net.halchatandroid.views.ZoomableImageView
+            android:id='@+id/icon'
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="fitCenter"
+            android:src="@drawable/testicon" />
+    </androidx.cardview.widget.CardView>
+    <Button
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="@dimen/standardText"
+        android:text="@string/settings_select"
+        android:id="@+id/buttonSelectImage"
+        android:layout_marginTop="10dp"/>
+    <Button
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="@dimen/standardText"
+        android:text="@string/settings_save"
+        android:id="@+id/buttonSaveAvatar"
+        android:layout_marginTop="10dp"/>
+    <com.google.android.material.slider.Slider
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:layout_marginStart="30dp"
+        android:layout_marginEnd="30dp"
+        android:valueFrom="1"
+        android:valueTo="5"
+        android:stepSize="0.1"
+        android:value="1"
+        android:id="@+id/sliderZoomAvatar"/>
+</LinearLayout>

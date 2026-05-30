@@ -1,0 +1,676 @@
+html, body {
+    background-color:#252525;
+}
+
+* {
+    -webkit-touch-callout:none;
+    -webkit-user-select:none;
+     -khtml-user-select:none;
+       -moz-user-select:none;
+        -ms-user-select:none;
+            user-select:none;
+    outline:none;
+    font-family:Roboto Condensed;
+}
+
+body {
+    -webkit-touch-callout:text;
+    -webkit-user-select:text;
+     -khtml-user-select:text;
+       -moz-user-select:text;
+        -ms-user-select:text;
+            user-select:text;
+    margin:0;
+}
+
+@font-face {
+    font-family: 'Roboto Condensed';
+    font-weight:400;
+    font-style:normal;
+    src:  
+        local('Roboto Condensed'),
+        url('https://halwarsing.net/resources/fonts/RobotoCondensed-Regular.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'Roboto Condensed';
+    font-weight:bold;
+    font-style:normal;
+    src:  
+        local('Roboto Condensed'),
+        url('https://halwarsing.net/resources/fonts/RobotoCondensed-Bold.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'Gamestation';
+    font-weight:400;
+    font-style:normal;
+    src:  
+        local('Gamestation'),
+        url('https://halwarsing.net/resources/fonts/GamestationCondensed.otf') format('opentype');
+}
+
+.clickable {
+    cursor:pointer;
+}
+
+.inline {
+    display:inline-block;
+}
+
+.text {
+    font-size:28px;
+    margin:0;
+    color:#000000;
+}
+
+select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image:url(/resources/icons/logotip-select.png);
+    background-repeat: no-repeat;
+    background-size:22px 13px;
+    background-position:right 10px top 55%;
+    
+}
+
+#menu {
+    position:fixed;
+    width:100%;
+    height:auto;
+    top:0;
+    left:0;
+    background-color:#7E7E7E;
+    /*min-width:300px;*/
+    /*max-width:1824px;*/
+    padding:5px;
+}
+
+#block-menu {
+    position:relative;
+    width:100%;
+    left:0;
+    top:0;
+    height:0;
+    margin:0;
+}
+
+#menuUser {
+    display:block;
+    position:relative;
+    float:right;
+    margin-right:20px;
+    margin-top:20px;
+    height:50px;
+    cursor:pointer;
+    font-size:24px;
+    max-width:200px;
+}
+
+#menuUser:hover>span {
+    color:#474747;
+    transition:0.25s;
+}
+
+#menuUser:not(:hover)>span {
+    color:#000000;
+    transition:0.25s;
+}
+
+#menuUser:hover>i {
+    border-color:#474747;
+    transition:0.25s;
+}
+
+#menuUser:not(:hover)>i {
+    border-color:#000000;
+    transition:0.25s;
+}
+
+#menuUserNickname {
+    font-size:20px;
+    color:#000000;
+    max-width:98px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    display:inline-block;
+    overflow: hidden; 
+}
+
+#menuUserIcon {
+    width:50px;
+    height:50px;
+    display:inline-block;
+    border-radius:50%;
+}
+
+#menuUserArrow {
+    border: solid;
+    border-color:#000000;
+    border-width: 0 2px 2px 0;
+    width:2px;
+    height:2px;
+    display: inline-block;
+    padding: 3px;
+    margin-left:0px;
+    margin-bottom:20px;
+}
+
+
+
+.menuUserArrowOpened {
+    -webkit-transform:translateY(5px) rotate(-135deg);
+    -ms-transform:translateY(5px) rotate(-135deg);
+    transform:translateY(5px) rotate(-135deg);
+}
+
+.menuUserArrowClosed {
+    -webkit-transform:rotate(45deg);
+    -ms-transform:rotate(45deg);
+    transform:rotate(45deg);
+}
+
+#pullMenuUser {
+    width:auto;
+    height:auto;
+    background-color:#858585;
+    display:block;
+    position:absolute;
+    margin-top:5px;
+    right:15px;
+    border-radius:0 0 10px 10px;
+    -webkit-transform-origin: 0 0;
+    -ms-transform-origin: 0 0;
+    transform-origin: 0 0;
+    -webkit-transition: 0.1s ease-in-out;
+    -moz-transition: 0.1s ease-in-out;
+    -o-transition: 0.1s ease-in-out;
+    transition: 0.1s ease-in-out;
+    padding-bottom:5px;
+}
+
+.pullMenuUserOpened {
+    -webkit-transform: scaleY(1);
+    -ms-transform: scaleY(1);
+    transform: scaleY(1);
+}
+
+.pullMenuUserClosed {
+    -webkit-transform: scaleY(0);
+    -ms-transform: scaleY(0);
+    transform: scaleY(0);
+}
+
+#pullMenuUserDiv {
+    display:block;
+    width:100%;
+    height:50px;
+    margin-top:5px;
+    cursor:pointer;
+    margin-right:5px;
+}
+
+#pullMenuUserDiv>a {
+    font-size:24px;
+    text-decoration:none;
+    color:#EBEBEB;
+    margin-left:10px;
+    float:left;
+    margin-top:12px;
+}
+
+#pullMenuUserDiv>img {
+    width:50px;
+    height:50px;
+    float:left;
+    margin-left:5px;
+}
+
+.halnethref {
+    font-size:20px;
+    text-decoration:none;
+    color:#EBEBEB;
+}
+
+#authSignMenuUser {
+    position:relative;
+    display:block;
+    text-align:center;
+    height:60px;
+    line-height:60px;
+}
+
+#pullMenuUserSection {
+    background-color:#636363;
+    height:1px;
+    width:calc(100% - 10px);
+    margin-left:5px;
+    margin-right:5px;
+    margin-top:5px;
+}
+
+.button {
+    padding-left:15px;
+    padding-right:15px;
+    font-family:Roboto Condensed;
+    font-weight:bold;
+    font-size:20px;
+    color:#000000;
+    border-radius:15px;
+    border:0;
+    cursor:pointer;
+}
+
+.logotipDiv {
+    margin:10px 0 0 10px;
+    display:inline-block;
+}
+
+.logotip {
+    width:70px;
+    height:70px;
+}
+
+#logotips {
+    display:inline-block;
+    width:auto;
+}
+
+#more-logotips {
+    display:none;
+    width:40px;
+    height:40px;
+    transition:0.25s;
+    margin-bottom:5px;
+}
+
+.more-logotips-closed {
+    transform:scaleY(1);
+}
+
+.more-logotips-opened {
+    transform:scaleY(-1);
+}
+
+.more-logotips-opened ~ #logotips {
+    display:inline-block;
+}
+
+
+/*NOTIFICATION*/
+
+#notification {
+    width:50px;
+    height:50px;
+    display:inline-block;
+    position:relative;
+}
+
+#notificationDiv {
+    position:relative;
+    width: min-content;
+    float:right;
+    margin-top:20px;
+    margin-left:20px;
+    margin-right:20px;
+    cursor:pointer;
+}
+
+#notificationNumber {
+    font-size:14px;
+    color:#EBEBEB;
+    background-color:#585858;
+    position:absolute;
+    top:0;
+    right:0;
+    text-align:center;
+    border-radius:20px;
+    padding:3px 3px 1px 3px;
+}
+
+#pullNotification {
+    width:auto;
+    height:auto;
+    max-width:500px;
+    background-color:#858585;
+    display: flex;
+    flex-direction: column-reverse;
+    position:absolute;
+    margin-top:5px;
+    right:15px;
+    border-radius:0 0 10px 10px;
+    -webkit-transform-origin: 0 0;
+    -ms-transform-origin: 0 0;
+    transform-origin: 0 0;
+    -webkit-transition: 0.1s ease-in-out;
+    -moz-transition: 0.1s ease-in-out;
+    -o-transition: 0.1s ease-in-out;
+    transition: 0.1s ease-in-out;
+    padding-bottom:5px;
+}
+
+.pullNotificationClosed {
+    -webkit-transform: scaleY(0);
+    -ms-transform: scaleY(0);
+    transform: scaleY(0);
+}
+
+.pullNotificationOpened {
+    -webkit-transform: scaleY(1);
+    -ms-transform: scaleY(1);
+    transform: scaleY(1);
+}
+
+#pullNotificationNothing {
+    display:block;
+    cursor:pointer;
+    margin-left:5px;
+    margin-right:5px;
+    font-size:24px;
+    color:#EBEBEB;
+    margin-top:20px;
+    margin-bottom:20px;
+}
+
+.notification {
+    cursor:pointer;
+    display:block;
+    margin:20px 5px 20px 5px;
+    text-align:center;
+    
+}
+
+#notificationText {
+    font-size:24px;
+    color:#EBEBEB;
+}
+
+#notificationUrl {
+    font-size:24px;
+    color:#EBEBEB;
+    text-decoration:none;
+}
+
+#notificationSection {
+    background-color:#636363;
+    height:1px;
+    width:calc(100% - 10px);
+    margin-left:5px;
+    margin-right:5px;
+    margin-top:5px;
+}
+    
+#notificationDivBtns {
+    display:block;
+    padding:0 10px 0 0;
+    margin:0 0 -10px 0;
+}
+
+#notificationBtn {
+    height:30px;
+    display:inline-block;
+    cursor:pointer;
+    width:fit-content;
+    padding-left:10px;
+    padding-right:10px;
+    font-family:Roboto Condensed;
+    font-weight:bold;
+    font-size:20px;
+    color:#000000;
+    border-radius:15px;
+    border:0;
+    margin:10px 0 0 10px;
+    background-color:#ffffff;
+}
+
+#allNotificationsDiv {
+    display:block;
+    order:999999;
+    margin:20px 0 0 0;
+}
+
+#allNotifications {
+    display:block;
+    font-size: 24px;
+    color: #EBEBEB;
+    text-decoration:none;
+    text-align:center;
+    margin:0 0 20px 0;
+}
+
+/*NOTIFICATION*/
+
+/*AGREEMENT COOKIE POLICY*/
+
+#agreementCookie {
+    position:fixed;
+    bottom:10px;
+    left:10px;
+    width:500px;
+    background-color:#3E3E3E;
+    padding:20px;
+    border-radius:15px;
+}
+
+#agreementCookieText {
+    margin:0;
+    font-size:20px;
+    font-family:Roboto Condensed;
+}
+
+#agreementCookiePolicy {
+    text-decoration:none;
+    color:#ffffff;
+}
+
+#agreementCookieBtn {
+    display:block;
+    width:300px;
+    font-size:20px;
+    font-family:Roboto Condensed;
+    font-weight:bold;
+    border-radius:5px;
+    border:0;
+    height:40px;
+    margin:10px auto 0 auto;
+    cursor:pointer;
+    color:#ffffff;
+}
+
+/*AGREEMENT COOKIE POLICY*/
+
+input {
+    -webkit-box-sizing: border-box;
+    -moz-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+#menu {
+    display:block;
+    background-color:#1E1E1E;
+    height:70px;
+}
+
+#pullMenuUser {
+    background-color:#3E3E3E;
+    margin:10px 0 0 0;
+}
+
+#pullMenuUserDiv>a {
+    color:#ffffff;
+}
+
+
+#pullNotification {
+    background-color:#3e3e3e;
+    margin:10px 0 0 0;
+}
+
+#notificationUrl,#notificationText {
+    color:#ffffff;
+}
+
+#logotips {
+    background-color:#1E1E1E;
+}
+
+#authSignMenuUser {
+    color:#FFFFFF;
+}
+
+.halnethref {
+    color:#FFFFFF;
+}
+
+#agreementCookie {
+    background-color:#FFE89E;
+}
+
+#agreementCookiePolicy {
+    color:#FFFFFF;
+}
+
+#agreementCookieBtn {
+    background-color:#414141;
+}
+
+#notificationBtn {
+    color:#000000;
+    background-color:#ffffff;
+}
+
+#pullNotificationNothing {
+    color:#FFFFFF;
+}
+
+#allNotifications {
+    color:#ffffff;
+}
+
+#notification {
+    width:40px;
+    height:37.89px;
+}
+
+#menuUserIcon {
+    width:60px;
+    height:60px;
+}
+
+#notificationDiv {
+    display:inline-block;
+    margin-top:15px;
+    float:right;
+}
+
+#notificationNumber {
+    background-color:#ffffff;
+    color:#000000;
+    font-weight:bold;
+    text-align:center;
+}
+
+#menuUserArrow {
+    border: solid;
+    border-color:#4A90E2;
+    border-width: 0 4px 4px 0;
+    width: 4px;
+    height: 4px;
+    display: inline-block;
+    padding: 4px;
+    margin-left: 0px;
+    margin-bottom: 25px;
+}
+
+#menuUser {
+    display:inline-block;
+    float: none;
+    margin-right: 20px;
+    margin-top: 5px;
+    height: 60px;
+    cursor: pointer;
+    font-size: 24px;
+    max-width: 200px;
+    float:right;
+}
+
+#menuUser:not(:hover)>i {
+    border-color: #4A90E2;
+    transition: 0.25s;
+}
+
+#menuUser:hover>i {
+    border-color: #4A90E2;
+    transition: 0.25s;
+}
+
+#logotip-haldrive {
+    width:49px;
+    height:53px;
+    margin:10px 0 0 0;
+}
+
+#logotip-halnet {
+    width:57px;
+    height:65.13px;
+}
+
+#logotip-halchat {
+    width:60px;
+    height:60px;
+    margin:8px 0 0 0;
+}
+
+#logotips {
+    display:inline-flex;
+    flex-direction:row;
+    height:65.13px;
+    column-gap: 10px;
+    margin:0 0 0 8px;
+}
+
+.logotipDiv {
+    margin:0;
+    display:block;
+}
+
+select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image:url(https://halchat.halwarsing.net/resources/icons/selectArrow.png);
+    background-repeat: no-repeat;
+    background-size:22px 13px;
+    background-position:right 10px top 55%;
+}
+
+#chatInfoMenu {
+    display:inline-flex;
+    flex-direction:row;
+    max-width:200px;
+    margin:10px auto 10px auto;
+    height:60px;
+    justify-content:center;
+    width:auto;
+}
+
+#chatIconMenu {
+    display:block;
+    width:60px;
+    height:60px;
+}
+
+#chatNameMenu {
+    display:block;
+    text-align:center;
+    line-height:60px;
+    height:60px;
+    color:#ffffff;
+    font-size:24px;
+    font-family:Roboto Condensed;
+    margin:0 0 0 10px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden; 
+}

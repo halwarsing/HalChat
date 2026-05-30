@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    tools:context=".main.InviteChatActivity">
+    <include
+        android:id="@+id/toolbar"
+        layout="@layout/chat_no_toolbar_layout"/>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center_horizontal">
+
+        <Button
+            android:id="@+id/createLinkWithPassword"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="@dimen/standardText"
+            android:text="@string/invite_chat_copy_with_password"
+            android:layout_marginTop="10dp"/>
+        <Button
+            android:id="@+id/createShortLinkWithPassword"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="@dimen/standardText"
+            android:text="@string/invite_chat_short_copy_with_password"
+            android:layout_marginTop="10dp"/>
+
+        <EditText
+            android:id="@+id/editTextFindUsers"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ems="12"
+            android:inputType="text"
+            android:hint="@string/placeholder_find_users"
+            android:layout_marginTop="10dp"
+            android:imeOptions="actionSearch"/>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginTop="10dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:id="@+id/usersView">
+
+        </androidx.recyclerview.widget.RecyclerView>
+    </LinearLayout>
+</LinearLayout>

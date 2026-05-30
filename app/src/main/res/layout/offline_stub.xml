@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- res/layout/offline_stub.xml -->
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/offlineRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background">
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="vertical"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp">
+        <!-- Иконка «Нет сети» -->
+        <ImageView
+            android:id="@+id/offlineIcon"
+            android:layout_width="250dp"
+            android:layout_height="250dp"
+            android:src="@drawable/halwashka_no_internet" />
+
+        <!-- Заголовок -->
+        <TextView
+            android:id="@+id/offlineTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/offline_text"
+            android:textAppearance="@style/TextAppearance.MaterialComponents.Headline6" />
+
+        <!-- Поясняющий текст -->
+        <TextView
+            android:id="@+id/offlineSubtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="@string/offline_retry"
+            android:layout_marginTop="20dp"
+            android:textAppearance="@style/TextAppearance.MaterialComponents.Body2" />
+
+        <!-- Кнопка «Повторить» -->
+        <Button
+            android:id="@+id/retryBtn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:minWidth="120dp"
+            android:text="@string/offline_retry_btn" />
+    </LinearLayout>
+
+
+</androidx.constraintlayout.widget.ConstraintLayout>

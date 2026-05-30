@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <application
+        android:name=".main.HalChatApp"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:preserveLegacyExternalStorage="true"
+        android:requestLegacyExternalStorage="true"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme"
+        tools:targetApi="31">
+        <activity
+            android:name=".main.JoinChatByLinkActivity"
+            android:exported="false" />
+        <activity
+            android:name=".main.AuthActivity"
+            android:exported="false" />
+        <activity
+            android:name=".main.ConfirmRegActivity"
+            android:exported="false" />
+        <activity
+            android:name=".main.RegActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme" />
+        <activity
+            android:name=".main.CreatePrivateChatActivity"
+            android:exported="false" />
+        <activity
+            android:name=".main.UserActivity"
+            android:exported="false" />
+        <activity
+            android:name=".main.SearchPeopleActivity"
+            android:exported="false" />
+        <activity
+            android:name=".EndOprosActivity"
+            android:exported="false" />
+        <activity
+            android:name=".OprosActivity"
+            android:exported="false" />
+        <activity
+            android:name=".main.ShareReceiverActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="application/*" />
+                <data android:mimeType="video/*" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".main.SettingsAppActivity"
+            android:exported="false" />
+        <activity
+            android:name=".main.ChangeAvatarActivity"
+            android:exported="false" />
+        <activity
+            android:name=".main.ChatUserActivity"
+            android:exported="false" />
+        <activity
+            android:name=".main.InviteChatActivity"
+            android:exported="false" />
+        <activity
+            android:name=".main.SettingsChatActivity"
+            android:exported="false" />
+        <activity
+            android:name=".main.UsersChatActivity"
+            android:exported="false" />
+        <activity
+            android:name=".main.ChatActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name=".main.CreatePasswordChatActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme" />
+        <activity
+            android:name=".main.AddChatActivity"
+            android:exported="false" />
+        <activity
+            android:name=".main.JoinChatActivity"
+            android:exported="false" />
+        <activity
+            android:name=".main.LogInActivity"
+            android:exported="false" />
+        <activity
+            android:name=".main.MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:host="halchat.halwarsing.net" />
+                <data android:pathPrefix="/joinChatLink" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="hc" android:host="join" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".main.WebSocketService"
+            android:exported="false" />
+
+        <receiver
+            android:name=".main.WebSocketRestartReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+        <receiver
+            android:name=".main.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.provider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+    </application>
+
+</manifest>

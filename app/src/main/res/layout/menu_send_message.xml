@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="@drawable/popup_background"
+    android:padding='8dp'>
+
+    <ImageButton
+        android:id="@+id/btn_attach_file"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:src="@drawable/ic_attach_file"
+        android:scaleType="fitCenter"
+        android:background="?attr/selectableItemBackgroundBorderless"/>
+
+    <ImageButton
+        android:id="@+id/btn_select_emoji"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:src="@drawable/ic_emojis"
+        android:scaleType="fitCenter"
+        android:background="?attr/selectableItemBackgroundBorderless"/>
+
+</LinearLayout>

@@ -1,0 +1,41 @@
+[versions]
+agp = "8.10.1"
+bcprovJdk15to18 = "1.77"
+commonsMath3 = "3.6.1"
+flexbox = "3.0.0"
+glide = "4.16.0"
+jscience = "4.3.1"
+junit = "4.13.2"
+junitVersion = "1.2.1"
+espressoCore = "3.6.1"
+appcompat = "1.7.0"
+material = "1.12.0"
+activity = "1.8.0"
+constraintlayout = "2.1.4"
+navigationFragment = "2.6.0"
+navigationUi = "2.6.0"
+okhttp = "4.9.3"
+openjsse = "1.1.5"
+
+[libraries]
+bcprov-jdk15to18 = { module = "org.bouncycastle:bcprov-jdk15to18", version.ref = "bcprovJdk15to18" }
+bctls-jdk15to18 = { module = "org.bouncycastle:bctls-jdk15to18", version.ref = "bcprovJdk15to18" }
+commons-math3 = { module = "org.apache.commons:commons-math3", version.ref = "commonsMath3" }
+flexbox = { module = "com.google.android:flexbox", version.ref = "flexbox" }
+glide = { module = "com.github.bumptech.glide:glide", version.ref = "glide" }
+jscience = { module = "org.jscience:jscience", version.ref = "jscience" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
+espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+material = { group = "com.google.android.material", name = "material", version.ref = "material" }
+activity = { group = "androidx.activity", name = "activity", version.ref = "activity" }
+constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
+navigation-fragment = { group = "androidx.navigation", name = "navigation-fragment", version.ref = "navigationFragment" }
+navigation-ui = { group = "androidx.navigation", name = "navigation-ui", version.ref = "navigationUi" }
+okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
+openjsse = { module = "org.openjsse:openjsse", version.ref = "openjsse" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Выбор чата</title>
+        <link rel="stylesheet" href="file:///android_asset/resources/css/main2.css">
+        <link rel="stylesheet" href="file:///android_asset/resources/css/selectChat.css">
+        <script type="text/javascript" src="file:///android_asset/resources/js/main.js"></script>
+        <script type="text/javascript" src="file:///android_asset/resources/js/BigInteger.js"></script>
+        <script type="text/javascript" src="file:///android_asset/resources/js/HalHash.js"></script>
+        <script type="text/javascript" src="file:///android_asset/resources/js/HalEncryption.js"></script>
+        <script type="text/javascript" src="file:///android_asset/resources/js/HalDialogWindow.js"></script>
+        <meta name="viewport" content="width=device-width,initial-scale=0.5" />
+        <meta content="true" name="HandheldFriendly" />
+        <meta content="width" name="MobileOptimized" />
+        <meta content="yes" name="apple-mobile-web-app-capable" />
+    </head>
+    <body>
+<!-- Block Menu -->
+        <div id="block-menu" style="height:80px;"></div>
+<!-- Block Menu -->
+        <div id="chatList">
+            <a href="https://halchat.halwarsing.net/createChat" id="addNewChatDiv">
+                <img src="file:///android_asset/resources/icons/addChat.png" id="addNewChatImg" draggable="false">
+                <span id="addNewChatSpan">Создать чат</span>
+            </a>
+        </div>
+<!-- Menu -->
+        <div id="menu">
+            <img draggable="false" id="more-logotips" class="more-logotips-closed" src="file:///android_asset/resources/icons/down.png" onclick="if(this.classList.contains('more-logotips-closed')){this.classList.remove('more-logotips-closed');this.classList.add('more-logotips-opened');}else{this.classList.remove('more-logotips-opened');this.classList.add('more-logotips-closed');}">
+            <div id="logotips">
+                <div class="logotipDiv"><a title="Halwarsing Chat" href="https://halchat.halwarsing.net/" class="inline"><img draggable="false" id="logotip-halchat" src="file:///android_asset/resources/icons/logotip.png" class="logotip"></a></div>
+                <div class="logotipDiv"><a title="Halwarsing Drive" href="https://haldrive.halwarsing.net/" class="inline"><img draggable="false" id="logotip-haldrive" src="file:///android_asset/resources/icons/logotip-haldrive.png" class="logotip"></a></div>
+                <div class="logotipDiv"><a title="Halwarsing Net" href="https://halwarsing.net/" class="inline"><img draggable="false" id="logotip-halnet" src="file:///android_asset/resources/icons/logotip-halnet.png" class="logotip"></a></div>
+            </div>
+            <div id="menuUser" onclick="menuOpen()">
+                <img id="menuUserIcon" src="file:///android_asset/resources/icons/people.png">
+                <i id="menuUserArrow" class="menuUserArrowClosed"></i>
+            </div>
+            <div id="pullMenuUser" class="pullMenuUserClosed">
+                <div id="pullMenuUserDiv" onclick="document.location.href='https://halwarsing.net/user'">
+                    <img src="file:///android_asset/resources/icons/people.png" draggable="false">
+                    <a href="https://halwarsing.net/user">Профиль</a>
+                </div>
+                <div id="pullMenuUserSection"></div>
+                <div id="pullMenuUserDiv" onclick="document.location.href='https://halwarsing.net/search'">
+                    <img src="file:///android_asset/resources/icons/search.png" draggable="false">
+                    <a href="https://halwarsing.net/search">Поиск</a>
+                </div>
+                <div id="pullMenuUserSection"></div>
+                <div id="pullMenuUserDiv" onclick="document.location.href='https://halwarsing.net/settings'">
+                    <img src="file:///android_asset/resources/icons/settings.png" draggable="false">
+                    <a href="https://halwarsing.net/settings">Настройки</a>
+                </div>
+                <div id="pullMenuUserSection"></div>
+                <div id="pullMenuUserDiv" onclick="document.location.href='https://halwarsing.net/privacy'">
+                    <img src="file:///android_asset/resources/icons/file.png" draggable="false">
+                    <a href="https://halwarsing.net/privacy">Политика конфиденциальности</a>
+                </div>
+                <div id="pullMenuUserSection"></div>
+                <div id="pullMenuUserDiv" onclick="document.location.href='https://halwarsing.net/exit'">
+                    <img src="file:///android_asset/resources/icons/exit.png" draggable="false">
+                    <a href="https://halwarsing.net/exit">Выйти</a>
+                </div>
+            </div>
+            <div id="notificationDiv"><img id="notification" src="file:///android_asset/resources/icons/notification.png" draggable="false" onclick="notificationOpen();"><span id="notificationNumber">0</span></div>
+            <div id="pullNotification" class="pullNotificationClosed"></div>
+        </div>
+        <script type="text/javascript" src="file:///android_asset/resources/js/menu.js"></script>
+<!-- Menu -->
+        <script>
+            let isSelectMode=false;//Исправить
+        </script>
+        <script type='text/javascript' src='file:///android_asset/resources/js/selectChat.js'></script>
+    </body>
+</html>

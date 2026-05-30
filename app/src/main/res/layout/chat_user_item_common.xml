@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:clickable="true"
+    android:focusable="true"
+    android:id="@+id/chat_user_panel"
+    android:gravity="center_vertical">
+    <androidx.cardview.widget.CardView
+        android:layout_width="50dp"
+        android:layout_height="50dp"
+        app:cardCornerRadius="25dp">
+
+        <ImageView
+            android:id='@+id/chat_user_icon'
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/testicon" />
+    </androidx.cardview.widget.CardView>
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/service_name"
+        android:textSize="@dimen/standardText"
+        android:layout_marginStart="10dp"
+        android:id="@+id/chat_user_nickname"
+        android:maxLines="1"
+        android:ellipsize="end">
+    </TextView>
+</LinearLayout>
