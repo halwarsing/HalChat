@@ -123,6 +123,7 @@ public class RegActivity extends AppCompatActivity {
                 postData.put("confirm",confirm?"1":"0");
                 postData.put("confirmNotifs",confirmNotifs?"1":"0");
 
+
                 HalNetAPI.apiReqWU("register",postData).thenAccept(data->{
                     try {
                         if(data.getLong("errorCode")==0) {

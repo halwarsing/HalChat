@@ -417,7 +417,7 @@ public class HalChat {
             //HCMessage msg=chatGroupChats.jsonMsgToHCMSG(data);
             HCMessage msg=(HCMessage)args[1];
             msg=chatGroupChats.addMessageToChat(msg,true);
-            msg.setDecryptedMessage(chatGroupChats.decryptMessage(msg,chatGroupChats.getPasswordChat(msg.chatId)));
+            msg=chatGroupChats.decryptMessage(msg,chatGroupChats.getPasswordChat(msg.chatId));
 
             if (chatListI != null) {
                 chatListI.onNewMessage(chatGroupChats.getChatInfo(msg.chatId),msg);

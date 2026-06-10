@@ -234,14 +234,19 @@ public class MainActivity extends AppCompatActivity {
             public void onEnterChat(HCChat chat) {
                 if(chatListAdapter!=null) {
                     if(chat==null)return;
-                    runOnUiThread(() -> {
-                        try {
-                            chatListAdapter.updateChat(chat,hc.chatGroupChats.getLastMessage(chat));
-                        } catch (JSONException e) {
-                            Log.e(TAG,"onNewChat",e);
+                    try {
+                        HCMessage lastMsg=hc.chatGroupChats.getLastMessage(chat);
+                        if(!lastMsg.isDecrypted) {
+                            lastMsg=hc.chatGroupChats.deencryptMessage(lastMsg,hc.chatGroupChats.getPasswordChat(chat.chatUID));
                         }
-                    });
 
+                        HCMessage finalLastMsg = lastMsg;
+                        runOnUiThread(() -> {
+                            chatListAdapter.updateChat(chat, finalLastMsg);
+                        });
+                    } catch (JSONException e) {
+                        Log.e(TAG,"onNewChat",e);
+                    }
                 }
             }
         });

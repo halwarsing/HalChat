@@ -6,7 +6,10 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
+import android.widget.Toast;
 
 
 import org.json.JSONArray;
@@ -182,7 +185,7 @@ public class HalChatGroupChats {
                             HCChat chat=getChatFromJSON(data.getJSONObject("data"));
                             if (!hasChatInDB(chatId)) {
                                 Log.e(TAG,"NEW CHAT: "+chat.icon);
-                                db.execSQL("INSERT INTO `groupChats` (`chatUID`, `id`, `name`, `icon`, `fromMe`, `created`, `publicType`, `isAllowMessages`, `chatType`, `isAllowComments`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", new String[]{
+                                db.execSQL("INSERT INTO `groupChats` (`chatUID`, `id`, `name`, `icon`, `fromMe`, `created`, `publicType`, `isAllowMessages`, `chatType`, `isAllowComments`, `description`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", new String[]{
                                         String.valueOf(chat.chatUID),
                                         chat.id,
                                         chat.name,
@@ -192,7 +195,8 @@ public class HalChatGroupChats {
                                         String.valueOf(chat.publicType),
                                         String.valueOf(chat.isAllowMessages),
                                         String.valueOf(chat.chatType),
-                                        String.valueOf(chat.isAllowComments)
+                                        String.valueOf(chat.isAllowComments),
+                                        chat.description
                                 });
                             }
                             hc.passwordSync.requestMissingPassword(chat.uid);
@@ -227,8 +231,12 @@ public class HalChatGroupChats {
                             sendCur.getString(5),new JSONArray(),sendCur.getString(6),sendCur.getString(7),sendCur.getString(8),
                             HalChatFunctionsLib.hexStringToByteArray(sendCur.getString(9)), false,false,false,sendCur.getInt(10),true,true,
                             mdata,sendCur.getLong(12),sendCur.getLong(13),false,sendCur.getInt(14));
-                    sendMessage(msg).thenAccept(data->{
-                        db.execSQL("DELETE FROM `sendMessages` WHERE `uid`=?",new String[]{String.valueOf(uid)});
+                    //TODO Сделать отправку опроса после появления интернета
+
+                    sendMessage(msg,null).thenAccept(data->{
+                        if(data!=null) {
+                            db.execSQL("DELETE FROM `sendMessages` WHERE `uid`=?", new String[]{String.valueOf(uid)});
+                        }
                     });
                 } catch (JSONException e) {
                     Log.e(TAG,"SM",e);
@@ -298,6 +306,8 @@ public class HalChatGroupChats {
                                 addNewChat(chat.getLong("uid"));
                                 Log.e(TAG,"Add new chat");
                             }
+                            checkNUpdateChatInfo(getChatFromJSON(chat));
+                            updateAllPollsChat(chat.getLong("uid"));
                         }
 
                         Log.e(TAG,"Scanning chats is over");
@@ -314,6 +324,59 @@ public class HalChatGroupChats {
                 Log.e(TAG,"getListChats",e);
             }
         });
+    }
+
+    private void checkNUpdateChatInfo(HCChat chat) {
+        HCChat origChat=getChatInfo(chat.chatUID);
+
+        if(origChat.chatType!=chat.chatType) {
+            updateChatType(origChat.uid,chat);
+        }
+
+        if(!origChat.description.equals(chat.description)) {
+            db.execSQL("UPDATE `groupChats` SET `description`=? WHERE `uid`=?",new String[]{String.valueOf(chat.description),String.valueOf(origChat.uid)});
+        }
+
+        if(origChat.fromMe!=chat.fromMe) {
+            //Сменился владелец чата
+            db.execSQL("UPDATE `groupChats` SET `fromMe`=? WHERE `uid`=?",new String[]{chat.fromMe?"1":"0",String.valueOf(origChat.uid)});
+        }
+
+        if(!origChat.icon.equals(chat.icon)) {
+            db.execSQL("UPDATE `groupChats` SET `icon`=? WHERE `uid`=?", new String[]{String.valueOf(chat.icon), String.valueOf(origChat.uid)});
+            hc.hd.addHalDriveFile(chat.icon);
+        }
+
+        if(!origChat.name.equals(chat.name)) {
+            db.execSQL("UPDATE `groupChats` SET `name`=? WHERE `uid`=?",new String[]{String.valueOf(chat.name),String.valueOf(origChat.uid)});
+        }
+
+        if(origChat.isAllowComments!=chat.isAllowComments) {
+            db.execSQL("UPDATE `groupChats` SET `isAllowComments`=? WHERE `uid`=?",new String[]{chat.isAllowComments?"1":"0",String.valueOf(origChat.uid)});
+        }
+
+        if(origChat.isAllowMessages!=chat.isAllowMessages) {
+            db.execSQL("UPDATE `groupChats` SET `isAllowMessages`=? WHERE `uid`=?",new String[]{chat.isAllowMessages?"1":"0",String.valueOf(origChat.uid)});
+        }
+
+        if(origChat.isDelete!=chat.isDelete) {
+            //Это либо чат был удалён, либо восстановлен
+            db.execSQL("UPDATE `groupChats` SET `isDelete`=? WHERE `uid`=?",new String[]{chat.isDelete?"1":"0",String.valueOf(origChat.uid)});
+        }
+
+        if(!origChat.id.equals(chat.id)) {
+            db.execSQL("UPDATE `groupChats` SET `id`=? WHERE `uid`=?",new String[]{chat.id,String.valueOf(origChat.uid)});
+        }
+
+        if(origChat.publicType!=chat.publicType) {
+            //Сменился тип публичности
+            db.execSQL("UPDATE `groupChats` SET `publicType`=? WHERE `uid`=?",new String[]{String.valueOf(chat.publicType),String.valueOf(origChat.uid)});
+
+        }
+    }
+
+    private void updateChatType(long uid,HCChat chat) {
+        db.execSQL("UPDATE `groupChats` SET `chatType`=? WHERE `uid`=?",new String[]{String.valueOf(chat.chatType),String.valueOf(uid)});
     }
 
     @SuppressLint("Range")
@@ -366,11 +429,8 @@ public class HalChatGroupChats {
             if (oldMsg != null) {
                 postData.put("start", oldMsg.msgId);
             }
-            Log.e(TAG,"LOAD OLD GOIDA ANOTHER: "+chat.chatUID);
             hc.hcapi.apiReq("getMessages", postData).thenAccept(res -> {
                 try {
-
-                    Log.e(TAG,"LOAD OLD ONE ANOTHER: "+res.getString("error"));
                     if (res.getInt("errorCode") == 0) {
                         JSONArray msgs = res.getJSONArray("messages");
                         List<HCMessage> messages=new ArrayList<>();
@@ -382,7 +442,7 @@ public class HalChatGroupChats {
                         for (int i = 0; i < msgs.length(); i++) {
                             HCMessage msg=jsonMsgToHCMSG(msgs.getJSONObject(i));
 
-                            msg.setDecryptedMessage(decryptMessage(msg,chat.password));
+                            msg=decryptMessage(msg,chat.password);
 
                             if(msg.isHalEnc) {
                                 msg=deencryptMessage(msg,chat.password);
@@ -452,7 +512,7 @@ public class HalChatGroupChats {
                 if (jsonObject.getInt("errorCode") == 0) {
                     JSONObject chat = jsonObject.getJSONObject("data");
                     if (!hasChatInDB(chat.getLong("uid"))) {
-                        db.execSQL("INSERT INTO `groupChats` (`chatUID`, `id`, `name`, `icon`, `fromMe`, `created`, `publicType`, `isAllowMessages`, `chatType`, `isAllowComments`, `password`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", new String[]{
+                        db.execSQL("INSERT INTO `groupChats` (`chatUID`, `id`, `name`, `icon`, `fromMe`, `created`, `publicType`, `isAllowMessages`, `chatType`, `isAllowComments`, `password`, `description`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)", new String[]{
                                 String.valueOf(chat.getLong("uid")),
                                 chat.getString("id"),
                                 chat.getString("name"),
@@ -463,7 +523,8 @@ public class HalChatGroupChats {
                                 String.valueOf(chat.getInt("isAllowMessages")),
                                 String.valueOf(chat.getInt("chatType")),
                                 String.valueOf(chat.getInt("isAllowComments")),
-                                password
+                                password,
+                                chat.getString("description")
                         });
                         hc.passwordSync.requestMissingPassword(chat.getLong("uid"));
                         hc.hd.addHalDriveFile(chat.getString("icon"));
@@ -695,7 +756,7 @@ public class HalChatGroupChats {
                             TaskExecutorManager.getInstance().submitDecrypt("chat"+chatId, () -> {
                                 while (loadLastMessagesWithoutThread(hcchat).get()) ;
                                 HCMessage lmsg=getLastMessage(hcchat);
-                                lmsg.setDecryptedMessage(decryptMessage(lmsg,getPasswordChat(chatId)));
+                                lmsg=decryptMessage(lmsg,getPasswordChat(chatId));
                                 hc.chatListI.onNewMessage(hcchat, lmsg);
                                 loadChatUsers(chatId);
                                 return null;
@@ -744,7 +805,7 @@ public class HalChatGroupChats {
                             TaskExecutorManager.getInstance().submitDecrypt("chat"+uid, () -> {
                                 while (loadLastMessagesWithoutThread(hcchat).get()) ;
                                 HCMessage lmsg=getLastMessage(hcchat);
-                                lmsg.setDecryptedMessage(decryptMessage(lmsg,getPasswordChat(chatId)));
+                                lmsg=decryptMessage(lmsg,getPasswordChat(chatId));
                                 hc.chatListI.onNewMessage(hcchat, lmsg);
                                 loadChatUsers(chatId);
                                 return null;
@@ -1280,29 +1341,30 @@ public class HalChatGroupChats {
 
     protected static HCChat getChatFromCursor(Cursor chatCur) {
         long uid,chatUID,created;
-        String id,name,icon,password;
+        String id,name,icon,password,description;
         int publicType,chatType;
         boolean fromMe,isAllowMessages,isDelete,isAllowComments;
-        uid=chatCur.getLong(0);
-        chatUID=chatCur.getLong(1);
-        id=chatCur.getString(2);
-        name=chatCur.getString(3);
-        icon=chatCur.getString(4);
-        fromMe=chatCur.getInt(5)==1;
-        created=chatCur.getLong(6);
-        publicType=chatCur.getInt(7);
-        isAllowMessages=chatCur.getInt(8)==1;
-        isDelete=chatCur.getInt(9)==1;
-        chatType=chatCur.getInt(10);
-        isAllowComments=chatCur.getInt(11)==1;
-        password=chatCur.getString(12);
-        return new HCChat(uid,chatUID,created,publicType,chatType,id,name,icon,password,fromMe,isAllowMessages,isDelete,isAllowComments);
+        uid=chatCur.getLong(chatCur.getColumnIndexOrThrow("uid"));
+        chatUID=chatCur.getLong(chatCur.getColumnIndexOrThrow("chatUID"));
+        id=chatCur.getString(chatCur.getColumnIndexOrThrow("id"));
+        name=chatCur.getString(chatCur.getColumnIndexOrThrow("name"));
+        icon=chatCur.getString(chatCur.getColumnIndexOrThrow("icon"));
+        fromMe=chatCur.getInt(chatCur.getColumnIndexOrThrow("fromMe"))==1;
+        created=chatCur.getLong(chatCur.getColumnIndexOrThrow("created"));
+        publicType=chatCur.getInt(chatCur.getColumnIndexOrThrow("publicType"));
+        isAllowMessages=chatCur.getInt(chatCur.getColumnIndexOrThrow("isAllowMessages"))==1;
+        isDelete=chatCur.getInt(chatCur.getColumnIndexOrThrow("isDelete"))==1;
+        chatType=chatCur.getInt(chatCur.getColumnIndexOrThrow("chatType"));
+        isAllowComments=chatCur.getInt(chatCur.getColumnIndexOrThrow("isAllowComments"))==1;
+        password=chatCur.getString(chatCur.getColumnIndexOrThrow("password"));
+        description=chatCur.getString(chatCur.getColumnIndexOrThrow("description"));
+        return new HCChat(uid,chatUID,created,publicType,chatType,id,name,icon,password,fromMe,isAllowMessages,isDelete,isAllowComments,description);
     }
 
     protected static HCChat getChatFromJSON(JSONObject data) {
         try {
             long uid,chatUID,created;
-            String id,name,icon,password;
+            String id,name,icon,password,description;
             int publicType,chatType;
             boolean fromMe,isAllowMessages,isAllowComments;
 
@@ -1318,7 +1380,8 @@ public class HalChatGroupChats {
             fromMe=data.getBoolean("fromMe");
             isAllowMessages=data.getInt("isAllowMessages")==1;
             isAllowComments=data.getInt("isAllowComments")==1;
-            return new HCChat(uid,chatUID,created,publicType,chatType,id,name,icon,password,fromMe,isAllowMessages, false,isAllowComments);
+            description=data.getString("description");
+            return new HCChat(uid,chatUID,created,publicType,chatType,id,name,icon,password,fromMe,isAllowMessages, false,isAllowComments,description);
         } catch (Exception e) {
             Log.e(TAG,"getChatFromJSON",e);
         }
@@ -1334,7 +1397,7 @@ public class HalChatGroupChats {
             do {
                 HCMessage msg=getMessageFromCursor(msgCur,userId);
                 if(is_decrypt) {
-                    msg.setDecryptedMessage(decryptMessage(msg,password));
+                    msg=decryptMessage(msg,password);
                 }
                 if(msg.isHalEnc) {
                     msg=deencryptMessage(msg,password);
@@ -1355,7 +1418,7 @@ public class HalChatGroupChats {
             do {
                 HCMessage msg=getMessageFromCursor(msgCur,userId);
                 if(is_decrypt) {
-                    msg.setDecryptedMessage(decryptMessage(msg,password));
+                    msg=decryptMessage(msg,password);
                 }
                 if(msg.isHalEnc) {
                     msg=deencryptMessage(msg,password);
@@ -1385,7 +1448,7 @@ public class HalChatGroupChats {
                     msg=deencryptMessage(msg,password);
                 }
 
-                msg.setDecryptedMessage(decryptMessage(msg,password));
+                msg=decryptMessage(msg,password);
 
                 out.add(msg);
             }
@@ -1397,20 +1460,74 @@ public class HalChatGroupChats {
         });
     }
 
-    protected String decryptMessage(HCMessage msg,String password) {
-        if(!hasPasswordChat(msg.chatId))return "";
-        if(msg.message.isEmpty())return "";
-        if(msg.isDecrypted)return msg.decryptedMessage;
+    protected HCMessage decryptMessage(HCMessage msg,String password) {
+        if(!hasPasswordChat(msg.chatId))return msg;
+        if(msg.message.isEmpty())return msg;
+        if(msg.isDecrypted)return msg;
+        boolean hasPoll=msg.type==4&&msg.data!=null&&msg.data.has("variants");
         if(msg.isHalEnc) {
-            return new String(hc.he.decodeByHash(HalChatFunctionsLib.hexStringToByteArray(msg.message), password + HalChatFunctionsLib.bytesToHex(msg.encryptId), 10, 100000, ""), StandardCharsets.UTF_8);
+            msg.setDecryptedMessage(new String(hc.he.decodeByHash(HalChatFunctionsLib.hexStringToByteArray(msg.message), password + HalChatFunctionsLib.bytesToHex(msg.encryptId), 10, 100000, ""), StandardCharsets.UTF_8));
+
+            if(hasPoll) {
+                try {
+                    JSONArray oldVariants = msg.data.getJSONArray("variants");
+                    JSONArray newVariants = new JSONArray();
+
+                    for(int i=0;i<oldVariants.length();i++) {
+                        String vr=new String(hc.he.decodeByHash(HalChatFunctionsLib.hexStringToByteArray(oldVariants.getString(i)), password + HalChatFunctionsLib.bytesToHex(msg.encryptId), 10, 100000, ""), StandardCharsets.UTF_8);
+                        newVariants.put(vr);
+                    }
+
+                    msg.data.put("variants",newVariants);
+                } catch (Exception e) {
+                    Log.e(TAG,"Failed to decrypt poll:",e);
+                }
+            }
+            return msg;
         }
         try {
-            return AESGCMHelper.decrypt(HalChatFunctionsLib.hexStringToByteArray(msg.message),msg.chatId);
+            msg.setDecryptedMessage(AESGCMHelper.decrypt(HalChatFunctionsLib.hexStringToByteArray(msg.message),msg.chatId));
 
+            if(hasPoll) {
+                Log.e(TAG,"DEcrypt variants");
+                try {
+                    JSONArray oldVariants = msg.data.getJSONArray("variants");
+                    JSONArray newVariants = new JSONArray();
+
+                    for(int i=0;i<oldVariants.length();i++) {
+                        String vr=AESGCMHelper.decrypt(HalChatFunctionsLib.hexStringToByteArray(oldVariants.getString(i)),msg.chatId);
+                        newVariants.put(vr);
+                    }
+
+                    msg.data.put("variants",newVariants);
+                } catch (Exception e) {
+                    Log.e(TAG,"Failed to decrypt poll:",e);
+                }
+            }
+
+            return msg;
         } catch (Exception e) {
-            Log.e(TAG,"Error in decryptMessage",e);
+            //Log.e(TAG,"Error in decryptMessage",e);
         }
-        return new String(hc.he.decodeByHash(HalChatFunctionsLib.hexStringToByteArray(msg.message), password + HalChatFunctionsLib.bytesToHex(msg.encryptId), 10, 100000, ""), StandardCharsets.UTF_8);
+        msg.setDecryptedMessage(new String(hc.he.decodeByHash(HalChatFunctionsLib.hexStringToByteArray(msg.message), password + HalChatFunctionsLib.bytesToHex(msg.encryptId), 10, 100000, ""), StandardCharsets.UTF_8));
+
+        if(hasPoll) {
+            try {
+                JSONArray oldVariants = msg.data.getJSONArray("variants");
+                JSONArray newVariants = new JSONArray();
+
+                for(int i=0;i<oldVariants.length();i++) {
+                    String vr=new String(hc.he.decodeByHash(HalChatFunctionsLib.hexStringToByteArray(oldVariants.getString(i)), password + HalChatFunctionsLib.bytesToHex(msg.encryptId), 10, 100000, ""), StandardCharsets.UTF_8);
+                    newVariants.put(vr);
+                }
+
+                msg.data.put("variants",newVariants);
+            } catch (Exception e) {
+                Log.e(TAG,"Failed to decrypt poll:",e);
+            }
+        }
+
+        return msg;
     }
 
     protected String encryptMessage(String msg,String password,byte[] encryptId) {
@@ -1575,7 +1692,7 @@ public class HalChatGroupChats {
         this.sendMessageEvent=sendMessageEvent;
     }
 
-    protected CompletableFuture<JSONObject> sendMessage(HCMessage msg) {
+    protected CompletableFuture<JSONObject> sendMessage(HCMessage msg, List<String> variants) {
         String encryptId;
         if(!msg.isHalEnc) {
             encryptId = generateEncryptId(System.currentTimeMillis(), msg.chatId);
@@ -1583,6 +1700,30 @@ public class HalChatGroupChats {
             msg.message = encryptMessage(msg.decryptedMessage, getPasswordChat(msg.chatId), msg.encryptId);
         } else {
             encryptId=HalChatFunctionsLib.bytesToHex(msg.encryptId);
+        }
+
+        if(variants!=null&&variants.size()>1&&variants.size()<13) {
+
+            try {
+                JSONArray variantsJSON = new JSONArray();
+
+                for (String vr : variants) {
+                    variantsJSON.put(encryptMessage(vr, getPasswordChat(msg.chatId), msg.encryptId));
+                }
+
+                JSONObject postData = new JSONObject();
+                postData.put("message", msg.message);
+                postData.put("encryptId", encryptId);
+                postData.put("chatId", msg.chatId);
+                postData.put("variants",variantsJSON);
+
+                msg.type=4;
+
+                return hc.hcapi.apiReq("sendPoll", postData);
+            } catch (Exception e) {
+                Log.e(TAG,"Failed to send poll: ",e);
+                return CompletableFuture.completedFuture(null);
+            }
         }
 
         try {
@@ -1641,7 +1782,6 @@ public class HalChatGroupChats {
         CompletableFuture<HCFile> future=new CompletableFuture<>();
         TaskExecutorManager.getInstance().submitDecryptChatActivity("downloadFile:chatId" + chatId + ":" + uidf, () -> {
             try {
-                Log.e(TAG,"Начинаем загрузочку нашу: "+uidf);
                 HttpUrl url = HttpUrl.parse("https://haldrive.halwarsing.net/api").newBuilder()
                         .addQueryParameter("req", "uploadHalChatFile")
                         .addQueryParameter("chatId", String.valueOf(chatId))
@@ -1667,12 +1807,9 @@ public class HalChatGroupChats {
                 CompletableFuture<JSONObject> jfut=new CompletableFuture<>();
                 hc.hdapi.executeRequest(request,jfut);
 
-                Log.e(TAG,"Кончили загрузочку: "+uidf);
-
                 jfut.thenAccept(jsonObject->{
                     try {
                         if (jsonObject.getInt("errorCode") == 0) {
-                            Log.e(TAG,"Получили результат: "+uidf);
                             JSONObject data = jsonObject.getJSONObject("data");
                             HCFile hcf = new HCFile(
                                     data.getString("id"),
@@ -1680,11 +1817,11 @@ public class HalChatGroupChats {
                                     data.getString("name")
                             );
 
-                            hc.hd.updateHalDriveFile(data.getString("id")).thenAccept(v -> {
-                                fileUploadEvent.onUpload(hcf, uidf);
-                            });
+                            hc.hd.addLocalFile(data.getString("path"),data.getString("name"),hc.idUser,data.getLong("updated"),file,data.getString("id"),
+                                    data.getString("mimeType"),data.getString("fileType"),data.getString("imageData"));
 
-                            file.delete();
+                            fileUploadEvent.onUpload(hcf, uidf);
+
                             future.complete(hcf);
                         } else {
                             Log.e(TAG, "API Error: " + jsonObject.getString("error"));
@@ -1712,7 +1849,7 @@ public class HalChatGroupChats {
         this.fileUploadEvent=fileUploadEvent;
     }
 
-    private HCMessage deencryptMessage(HCMessage msg,String password) {
+    protected HCMessage deencryptMessage(HCMessage msg,String password) {
         if(!msg.isHalEnc){
             return msg;}
         if(msg.message.isEmpty()){
@@ -1723,12 +1860,32 @@ public class HalChatGroupChats {
             return msg;
         }
         if(!msg.isDecrypted) {
-            msg.setDecryptedMessage(decryptMessage(msg, password));
+            msg=decryptMessage(msg, password);
         }
 
         try {
             String newencryptmsg= AESGCMHelper.encrypt(msg.decryptedMessage,msg.chatId);
             msg.message=newencryptmsg;
+
+            if(msg.type==4&&msg.data!=null&&msg.data.has("variants")) {
+                try {
+                    JSONArray oldVariants = msg.data.getJSONArray("variants");
+                    JSONArray newVariants = new JSONArray();
+                    for (int i=0;i<oldVariants.length();i++) {
+                        String vr=oldVariants.getString(i);
+                        Log.e(TAG,vr);
+                        newVariants.put(AESGCMHelper.encrypt(vr,msg.chatId));
+                    }
+                    msg.data.put("variants",newVariants);
+
+                    if(msg.uid!=-1) {
+                        db.execSQL("UPDATE `groupChatsMessages` SET `data`=? WHERE `uid`=?", new String[]{msg.data.toString(), String.valueOf(msg.uid)});
+                    }
+                } catch (JSONException e) {
+                    Log.e(TAG,"Failed to deencrypt poll:",e);
+                }
+            }
+
             msg.isHalEnc=false;
             if(msg.uid!=-1) {
                 db.execSQL("UPDATE `groupChatsMessages` SET `message`=?, `isHalEnc`=0 WHERE `uid`=?", new String[]{newencryptmsg, String.valueOf(msg.uid)});
@@ -1801,6 +1958,137 @@ public class HalChatGroupChats {
         return CompletableFuture.completedFuture(false);
     }
 
+    //Polls
+    protected long getVotesPollVariant(long chatId, long msgId, long variant) {
+        Cursor cursor=db.rawQuery("SELECT * FROM `groupChatsPollVotes` WHERE `chatId`=? AND `msgId`=? AND `variant`=?",new String[]{String.valueOf(chatId),
+        String.valueOf(msgId),String.valueOf(variant)});
+        long out=0;
+        if(cursor.moveToFirst()) {
+            out=cursor.getLong(cursor.getColumnIndexOrThrow("votes"));
+        }
+        cursor.close();
+        return out;
+    }
+
+    protected void updateVotesPollVariant(long chatId, long msgId, long variant, long votes) {
+        Cursor cursor=db.rawQuery("SELECT * FROM `groupChatsPollVotes` WHERE `chatId`=? AND `msgId`=? AND `variant`=?",new String[]{String.valueOf(chatId),String.valueOf(msgId),String.valueOf(variant)});
+        if(!cursor.moveToFirst()) {
+            cursor.close();
+            db.execSQL("INSERT INTO `groupChatsPollVotes` (`chatId`, `msgId`, `variant`, `votes`) VALUES (?, ?, ? ,?)",new String[]{String.valueOf(chatId),String.valueOf(msgId),
+            String.valueOf(variant),String.valueOf(votes)});
+
+            return;
+        }
+        cursor.close();
+
+        db.execSQL("UPDATE `groupChatsPollVotes` SET `votes`=? WHERE `chatId`=? AND `msgId`=? AND `variant`=?",new String[]{String.valueOf(votes),String.valueOf(chatId),
+        String.valueOf(msgId),String.valueOf(variant)});
+    }
+
+    protected CompletableFuture<Boolean> updateAllPollsChat(long chatId) {
+        CompletableFuture<Boolean> future=new CompletableFuture<>();
+        TaskExecutorManager.getInstance().submitChatSync("getResultPoll:chatId:"+chatId,()->{
+            Cursor cursor=db.rawQuery("SELECT * FROM `groupChatsMessages` WHERE `chatId`=? AND `type`=4 AND `isDelete`=0",new String[]{String.valueOf(chatId)});
+            if(cursor.moveToFirst()) {
+                do {
+                    try {
+                        JSONObject postData = new JSONObject();
+                        final long msgId=cursor.getLong(cursor.getColumnIndexOrThrow("msgId"));
+                        postData.put("chatId", chatId);
+                        postData.put("msgId", msgId);
+                        JSONObject data=hc.hcapi.apiReq("getResultPoll",postData).get();
+                        if(data.getLong("errorCode")==0) {
+                            JSONArray result=data.getJSONArray("result");
+                            for(int i=0;i<result.length();i++) {
+                                updateVotesPollVariant(chatId,msgId,i,result.getLong(i));
+                            }
+                        } else {
+                            Log.e(TAG,"Error api getResultPoll: "+data.getString("errorCode")+";"+data.getLong("errorCode"));
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG,"Error json:",e);
+                    }
+                } while (cursor.moveToNext());
+            }
+            cursor.close();
+            future.complete(true);
+            return null;
+        });
+
+        return future;
+    }
+
+    protected CompletableFuture<Boolean> updatePoll(long chatId, long msgId) {
+        CompletableFuture<Boolean> future=new CompletableFuture<>();
+
+        try {
+            JSONObject postData=new JSONObject();
+            postData.put("chatId",chatId);
+            postData.put("msgId",msgId);
+            hc.chatWS.apiReq("getResultPoll",postData).thenAccept(data->{
+                try {
+                    if(data.getLong("errorCode")==0) {
+                        JSONArray result=data.getJSONArray("result");
+                        for(int i=0;i<result.length();i++) {
+                            updateVotesPollVariant(chatId,msgId,i,result.getLong(i));
+                        }
+
+                        future.complete(true);
+
+                        return;
+                    } else {
+                        Log.e(TAG,"Error api getResultPoll: "+data.getString("error")+";"+data.getLong("errorCode"));
+                    }
+                } catch (JSONException e) {
+                    Log.e(TAG,"getResultPoll:",e);
+                }
+                future.complete(false);
+            });
+        } catch (JSONException e) {
+            Log.e(TAG,"updatePoll:",e);
+            future.complete(false);
+        }
+
+        return future;
+    }
+
+    protected CompletableFuture<Boolean> votePollVariant(long chatId, long msgId, long variant) {
+        CompletableFuture<Boolean> future=new CompletableFuture<>();
+
+        try {
+            JSONObject postData = new JSONObject();
+            postData.put("chatId", chatId);
+            postData.put("msgId", msgId);
+            postData.put("variant", variant);
+
+            hc.chatWS.apiReq("votePoll", postData).thenAccept(data -> {
+                try {
+                    if (data.getLong("errorCode")==0) {
+                        updatePoll(chatId,msgId).thenAccept(b->{
+                            future.complete(true);
+                        });
+                        return;
+                    } else if(data.getLong("errorCode")==4) {
+                        String err=data.getString("error");
+                        new Handler(Looper.getMainLooper()).post(() -> {
+                            Toast.makeText(hc.context, err, Toast.LENGTH_SHORT).show();
+                        });
+                    } else {
+                        Log.e(TAG,"Error api votePoll: "+data.getString("error")+";"+data.getLong("errorCode"));
+                    }
+                } catch (JSONException e) {
+                    Log.e(TAG,"votePoll:",e);
+                }
+                future.complete(false);
+            });
+        } catch (Exception e) {
+            Log.e(TAG,"votePolLVariant:",e);
+            future.complete(false);
+        }
+
+        return future;
+    }
+
     public interface HalChatAddMessage {
         void addMessages(List<HCMessage> messages);
     }
@@ -1827,7 +2115,7 @@ public class HalChatGroupChats {
         public String getMessage(HalChat hc) {
             if(isEncrypted) {
                 if(!msg.isDecrypted) {
-                    msg.setDecryptedMessage(hc.chatGroupChats.decryptMessage(msg, hc.chatGroupChats.getPasswordChat(msg.chatId)));
+                    msg=hc.chatGroupChats.decryptMessage(msg, hc.chatGroupChats.getPasswordChat(msg.chatId));
                 }
                 return msg.decryptedMessage;
             }

@@ -130,6 +130,12 @@ public class ChatActivity extends AppCompatActivity {
     private Button emojisSelectBtn, pixelsSelectBtn;
     private GridView emojiGrid, pixelGrid;
 
+    //Polls
+    private LinearLayout pollMenu,pollMenuVariants;
+    private Button pollAddBtn,pollRemoveBtn;
+    private boolean isPollMenuVisible=false;
+    private int pollVariants=2;
+
     private final HalChat.HalChatEvent onNewActionEvent=this::onNewAction;
     private final ActivityResultLauncher<String> selectMultipleFilesLauncher = registerForActivityResult(
             new ActivityResultContracts.GetMultipleContents(),
@@ -213,6 +219,12 @@ public class ChatActivity extends AppCompatActivity {
         emojiGrid=emojiMenu.findViewById(R.id.emoji_grid);
         pixelGrid=emojiMenu.findViewById(R.id.pixel_grid);
         setupEmojiMenu();
+
+        //Polls
+        pollMenu=findViewById(R.id.poll_menu);
+        pollMenuVariants=findViewById(R.id.poll_menu_variants);
+        pollAddBtn=findViewById(R.id.btn_poll_menu_add);
+        pollRemoveBtn=findViewById(R.id.btn_poll_menu_remove);
 
         //Init
         messagesRecyclerView=findViewById(R.id.messages_recycler_view);
@@ -402,8 +414,11 @@ public class ChatActivity extends AppCompatActivity {
                     hc.chatGroupChats.checkChat(chatId);
                 }
             });
+
             return null;
         });
+
+        hc.chatGroupChats.updateAllPollsChat(chatId);
 
 
         //History
@@ -435,6 +450,9 @@ public class ChatActivity extends AppCompatActivity {
                 goToMessage(answerMsg.msgId);
             }
         });
+
+        pollRemoveBtn.setOnClickListener(this::removePollMenu);
+        pollAddBtn.setOnClickListener(this::addPollMenu);
     }
 
     private void checkLoadMore() {
@@ -563,7 +581,28 @@ public class ChatActivity extends AppCompatActivity {
         answerType=0;
         answerMsg=null;
 
-        hc.chatGroupChats.sendMessage(message).thenAccept(res->{
+        //Polls
+        List<String> variants=new ArrayList<>();
+        JSONArray variantsJSON=new JSONArray();
+        if(isPollMenuVisible) {
+            for (int i = 0; i < pollVariants; i++) {
+                EditText editText = (EditText) pollMenuVariants.getChildAt(i);
+                String text = editText.getText().toString();
+                if (text.isEmpty()) {
+                    //Вариант пустой, прерываем
+                    Toast.makeText(this, "Удалите незаполненные варианты", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                variants.add(text);
+                variantsJSON.put(text);
+            }
+
+            message.type = 4;
+
+            togglePollMenu();
+        }
+
+        hc.chatGroupChats.sendMessage(message,variants).thenAccept(res->{
             if(res==null){
                 return;
             }
@@ -573,11 +612,18 @@ public class ChatActivity extends AppCompatActivity {
             try {
                 if (res.getInt("errorCode") == 0) {
                     Log.e(TAG, "Successful send message");
-                    message.msgId =res.getLong("uid");
-                    message.time = res.getLong("time");
-                    hc.chatGroupChats.addMessageToChat(message,true);
+                    HCMessage nmsg=hc.chatGroupChats.jsonMsgToHCMSG(res.getJSONObject("message"));
+
+                    nmsg=hc.chatGroupChats.deencryptMessage(nmsg,hc.chatGroupChats.getPasswordChat(nmsg.chatId));
+                    hc.chatGroupChats.addMessageToChat(nmsg,true);
+                    HCMessage finalNmsg = nmsg;
+
+                    if(nmsg.type==4&&nmsg.data!=null&&nmsg.data.has("variants")) {
+                        nmsg.data.put("variants", variantsJSON);
+                    }
+
                     runOnUiThread(() -> {
-                        messageAdapter.addMessageLoaded(message);
+                        messageAdapter.addMessageLoaded(finalNmsg);
                         //messageAdapter.addNewMessage(message);
                         messagesRecyclerView.scrollToPosition(messageAdapter.messageList.size()-1);
                     });
@@ -628,6 +674,7 @@ public class ChatActivity extends AppCompatActivity {
 
         ImageButton btnAttachFile = popupView.findViewById(R.id.btn_attach_file);
         ImageButton btnSelectEmoji = popupView.findViewById(R.id.btn_select_emoji);
+        ImageButton btnPoll=popupView.findViewById(R.id.btn_poll);
 
         btnAttachFile.setOnClickListener(v -> {
             selectFile();
@@ -639,8 +686,13 @@ public class ChatActivity extends AppCompatActivity {
             popupWindow.dismiss();
         });
 
+        btnPoll.setOnClickListener(v->{
+            togglePollMenu();
+            popupWindow.dismiss();
+        });
+
         popupWindow.setElevation(10);
-        popupWindow.showAsDropDown(anchorView, 0, -anchorView.getHeight() - 320);
+        popupWindow.showAsDropDown(anchorView, 0, -anchorView.getHeight() - 520);
     }
 
     protected void openComments(long msgId) {
@@ -1197,5 +1249,51 @@ public class ChatActivity extends AppCompatActivity {
         if (position != -1) {
             messagesRecyclerView.smoothScrollToPosition(position);
         }
+    }
+
+    //Polls
+    private void togglePollMenu() {
+        if (isPollMenuVisible) {
+            pollMenu.animate()
+                    .translationY(pollMenu.getHeight())
+                    .alpha(0f)
+                    .setDuration(300)
+                    .withEndAction(() -> pollMenu.setVisibility(View.GONE));
+        } else {
+            for(int i=2;i<pollVariants;i++) {
+                pollMenuVariants.getChildAt(i).setVisibility(View.GONE);
+            }
+            for(int i=0;i<12;i++) {
+                ((EditText)pollMenuVariants.getChildAt(i)).setText("");
+            }
+            pollVariants=2;
+
+            pollMenu.setVisibility(View.VISIBLE);
+            pollMenu.setAlpha(0f);
+            pollMenu.animate()
+                    .translationY(0)
+                    .alpha(1f)
+                    .setDuration(300);
+        }
+        isPollMenuVisible = !isPollMenuVisible;
+    }
+
+    private void removePollMenu(View v) {
+        if(pollVariants<=2) {
+            Toast.makeText(this,"Меньше 2-х вариантов не может быть",Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        pollVariants--;
+        pollMenuVariants.getChildAt(pollVariants).setVisibility(View.GONE);
+    }
+
+    private void addPollMenu(View v) {
+        if(pollVariants>=12) {
+            Toast.makeText(this,"Нельзя добавлять более 12 вариантов",Toast.LENGTH_SHORT).show();
+            return;
+        }
+        pollMenuVariants.getChildAt(pollVariants).setVisibility(View.VISIBLE);
+        pollVariants++;
     }
 }

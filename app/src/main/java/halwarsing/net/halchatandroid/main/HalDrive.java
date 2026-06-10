@@ -12,10 +12,13 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 import javax.net.ssl.HttpsURLConnection;
 
@@ -34,6 +37,24 @@ public class HalDrive {
     private List<HDUploadOrder> orderUpload=new ArrayList<>();
     private HashMap<String,CompletableFuture<File>> downloadPromises=new HashMap<>();
     private HDUploadFileEvent uploadFileEvent;
+
+    //Если файл был загружен с устройства, чтобы не скачивать его, добавляем сразу в базу
+    public HDFile addLocalFile(String path,String name,long fromId, long updated, File file, String id, String mimeType, String fileType, String imageData) {
+        if(isFileExists(id)||!file.exists()) {
+           return getHDFileById(id);
+        }
+
+        File newFile=new File(directory,id+".hdf");
+
+        boolean isRenamed=file.renameTo(newFile);
+
+        if(isRenamed) {
+            db.execSQL("INSERT INTO `files` (`id`, `path`, `name`, `fromId`, `updated`, `mimeType`, `fileType`, `imageData`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", new String[]{id, path, name, String.valueOf(fromId), String.valueOf(updated),mimeType,fileType,imageData});
+        } else {
+            Log.e(TAG,"Rename failed");
+        }
+        return getHDFileById(id);
+    }
 
 
     private static class HDDownloadOrder {
@@ -66,8 +87,6 @@ public class HalDrive {
         db=sdb;
         codeUser=scodeUser;
         directory=new File(scontext.getExternalFilesDir(null),PATH_HD_FILES);
-
-
         directory.mkdirs();
     }
 
@@ -117,10 +136,13 @@ public class HalDrive {
                             }
                             inputStream.close();
                             outputStream.close();
-                            db.execSQL("UPDATE `files` SET `path`=?, `name`=?, `fromId`=?, `updated`=?, `isFolder`=? WHERE `id`=?", new String[]{data.getString("path"),data.getString("name"), String.valueOf(data.getLong("fromId")), String.valueOf(data.getLong("updated")), String.valueOf(data.getInt("isFolder")), id});
+                            db.execSQL("UPDATE `files` SET `path`=?, `name`=?, `fromId`=?, `updated`=?, `isFolder`=?, `mimeType`=?, `fileType`=?, `imageData`=? WHERE `id`=?",
+                                    new String[]{data.getString("path"),data.getString("name"), String.valueOf(data.getLong("fromId")),
+                                            String.valueOf(data.getLong("updated")), String.valueOf(data.getInt("isFolder")), data.getString("mimeType"),
+                                            data.getString("fileType"), data.getString("imageData"), id});
                             Log.e(TAG, "HalDrive File " + id + " successfully downloaded");
                         } catch (Exception e) {
-                            Log.e(TAG,"ERROR SAVE FILE: ",e);
+                            //Log.e(TAG,"ERROR SAVE FILE: ",e);
                         }
                     } else {
                         Log.e(TAG, "HalDrive File is already existing: " + id);
@@ -224,7 +246,7 @@ public class HalDrive {
     public CompletableFuture<File> getFileById(String id) {
         File file=new File(directory,id+".hdf");
 
-        Log.e(TAG,id+";"+String.valueOf(file.exists()));
+        Log.e(TAG,id+";"+file.exists());
         if(!file.exists()) {
             if(downloadPromises.containsKey(id)) {
                 return downloadPromises.get(id);
@@ -263,8 +285,20 @@ public class HalDrive {
 
     protected HDFile getHDFileByCursor(Cursor cursor) {
         if(cursor==null)return null;
-        return new HDFile(cursor.getLong(0),cursor.getString(1),cursor.getString(2),
-                cursor.getString(3),cursor.getLong(4),cursor.getLong(5),cursor.getInt(6)==1);
+        try {
+            return new HDFile(cursor.getLong(0),cursor.getString(1),cursor.getString(2),
+                    cursor.getString(3),cursor.getLong(4),cursor.getLong(5),cursor.getInt(6)==1,
+                    cursor.getString(7),cursor.getString(8),cursor.getString(9));
+        } catch (Exception e) {
+            try {
+                return new HDFile(cursor.getLong(0), cursor.getString(1), cursor.getString(2),
+                        cursor.getString(3), cursor.getLong(4), cursor.getLong(5), cursor.getInt(6) == 1,
+                        cursor.getString(7), cursor.getString(8), "");
+            } catch (Exception ed) {
+                Log.e(TAG,"Failed HDFILE",ed);
+            }
+        }
+        return null;
     }
 
     protected Cursor getCursorById(String id) {

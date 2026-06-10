@@ -3,10 +3,10 @@ package halwarsing.net.halchatandroid.type;
 //Класс чата (вся информация)
 public class HCChat {
     public long uid,chatUID,created;
-    public String id,name,icon,password;
+    public String id,name,icon,password,description;
     public int publicType,chatType;
     public boolean fromMe,isAllowMessages,isDelete,isAllowComments;
-    public HCChat(long uid,long chatUID,long created,int publicType,int chatType,String id,String name,String icon,String password,boolean fromMe,boolean isAllowMessages,boolean isDelete,boolean isAllowComments) {
+    public HCChat(long uid,long chatUID,long created,int publicType,int chatType,String id,String name,String icon,String password,boolean fromMe,boolean isAllowMessages,boolean isDelete,boolean isAllowComments,String description) {
         this.uid=uid;
         this.chatUID=chatUID;
         this.created=created;
@@ -20,5 +20,6 @@ public class HCChat {
         this.isAllowMessages=isAllowMessages;
         this.isDelete=isDelete;
         this.isAllowComments=isAllowComments;
+        this.description=description;
     }
 }
