@@ -10,8 +10,8 @@ android {
         applicationId = "halwarsing.net.halchatandroid"
         minSdk = 26
         targetSdk = 35
-        versionCode = 25
-        versionName = "1.0.1 (Open Source)"
+        versionCode = 26
+        versionName = "1.0.2 (Vote or don't vote)"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

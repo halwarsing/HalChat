@@ -64,6 +64,7 @@ public class WhitelistDNS implements Dns {
     @Override
     public List<InetAddress> lookup(@NonNull String hostname) throws UnknownHostException {
         if (hndomains.contains(hostname) && isWhiteListActive()) {
+            Log.e(TAG,"ENABLE Z");
             return Arrays.asList(InetAddress.getByName("158.160.241.255"));
         }
         return Dns.SYSTEM.lookup(hostname);

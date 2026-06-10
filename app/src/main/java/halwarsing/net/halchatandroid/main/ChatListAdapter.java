@@ -144,6 +144,7 @@ public class ChatListAdapter extends RecyclerView.Adapter<ChatListAdapter.ChatLi
 
     protected void updateChat(HCChat chat,HCMessage lastMsg) {
         int z=-1;
+
         for (int i=0;i<chatList.size();i++) {
             ChatInfoList il=chatList.get(i);
             if(il.getUid()==chat.chatUID) {
@@ -158,7 +159,7 @@ public class ChatListAdapter extends RecyclerView.Adapter<ChatListAdapter.ChatLi
 
         String msg="Новый чат";
 
-        if(lastMsg!=null) {
+        if(lastMsg!=null && hc.chatGroupChats.hasPasswordChat(chat.chatUID)) {
             msg=lastMsg.decryptedMessage;
         } else if(!mainActivity.hc.chatGroupChats.hasPasswordChat(chat.chatUID)) {
             msg="Введите пароль";
@@ -174,7 +175,9 @@ public class ChatListAdapter extends RecyclerView.Adapter<ChatListAdapter.ChatLi
             }
         });
 
-        notifyDataSetChanged(); // Полное обновление списка
+        mainActivity.runOnUiThread(()->{
+            notifyDataSetChanged();
+        });
     }
 
     protected void deleteChat(HCChat chat) {

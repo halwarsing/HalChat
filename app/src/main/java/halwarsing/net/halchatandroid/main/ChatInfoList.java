@@ -1,5 +1,7 @@
 package halwarsing.net.halchatandroid.main;
 
+import halwarsing.net.halchatandroid.type.HCMessage;
+
 //Информация чата для списка
 public class ChatInfoList {
     private String name;

@@ -26,7 +26,9 @@ import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.google.android.flexbox.FlexboxLayout;
 
+import org.json.JSONArray;
 import org.json.JSONException;
+import org.w3c.dom.Text;
 
 import java.io.File;
 import java.util.Collections;
@@ -123,10 +125,10 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         if (viewType == TYPE_SENT) {
             View view = LayoutInflater.from(context).inflate(R.layout.message_item_sent, parent, false);
-            return new SentMessageViewHolder(view);
+            return new SentMessageViewHolder(view, this);
         } else if (viewType == TYPE_RECEIVED) {
             View view = LayoutInflater.from(context).inflate(R.layout.message_item_received, parent, false);
-            return new ReceivedMessageViewHolder(view);
+            return new ReceivedMessageViewHolder(view, this);
         } else if (viewType == TYPE_START_CHAT) {
             View view = LayoutInflater.from(context).inflate(R.layout.start_chat_item, parent, false);
             return new StartChatViewHolder(view);
@@ -219,6 +221,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
         MessageViewHolder msgv=(MessageViewHolder) holder;
 
+        msgv.pollVariantsDiv.setVisibility(View.GONE);
+
         msgv.pixelDiv.setVisibility(View.GONE);
 
         msgv.messageText.setVisibility(View.VISIBLE);
@@ -237,6 +241,32 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             msgv.dateBlock.setVisibility(View.VISIBLE);
         } else {
             msgv.dateBlock.setVisibility(View.GONE);
+        }
+
+        //Polls
+        if(message.type==4&&message.data!=null) {
+            try {
+                JSONArray variants = message.data.getJSONArray("variants");
+
+                for(int i=variants.length();i<12;i++) {
+                    msgv.pollVariantsDiv.getChildAt(i).setVisibility(View.GONE);
+                }
+
+                for(int i=0;i<variants.length();i++) {
+                    LinearLayout pollVarLL=(LinearLayout)msgv.pollVariantsDiv.getChildAt(i);
+                    TextView pollText=(TextView)pollVarLL.getChildAt(0);
+                    TextView pollCount=(TextView)pollVarLL.getChildAt(1);
+
+                    pollText.setText(variants.getString(i));
+                    pollCount.setText(String.valueOf(hc.chatGroupChats.getVotesPollVariant(message.chatId,message.msgId,i)));
+
+                    pollVarLL.setVisibility(View.VISIBLE);
+                }
+
+                msgv.pollVariantsDiv.setVisibility(View.VISIBLE);
+            } catch (JSONException e) {
+                Log.e(TAG,"Failed to show variants poll:",e);
+            }
         }
 
         hc.hnUsers.getUserByUserId(message.fromId).thenAccept(fromUser->{
@@ -278,14 +308,14 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 TextView answerText=answerMsg.findViewById(R.id.answerText);
 
                 final long answerMsgId=message.answerMsg;
-                HCMessage answerHCM=hc.chatGroupChats.getMessageById(message.chatId,message.answerMsg);
-                if(answerHCM==null) {
+                final HCMessage[] answerHCM = {hc.chatGroupChats.getMessageById(message.chatId, message.answerMsg)};
+                if(answerHCM[0] ==null) {
                     //RETRY
                 } else {
-                    hc.hnUsers.getUserByUserId(answerHCM.fromId).thenAccept(answerUser->{
+                    hc.hnUsers.getUserByUserId(answerHCM[0].fromId).thenAccept(answerUser->{
                         answerNickname.setText(answerUser.nickname);
-                        answerHCM.setDecryptedMessage(hc.chatGroupChats.decryptMessage(answerHCM,password));
-                        answerText.setText(HalChatFunctionsLib.replaceEmojis(context,answerText,hc,answerHCM.decryptedMessage),TextView.BufferType.SPANNABLE);
+                        answerHCM[0] =hc.chatGroupChats.decryptMessage(answerHCM[0],password);
+                        answerText.setText(HalChatFunctionsLib.replaceEmojis(context,answerText,hc, answerHCM[0].decryptedMessage),TextView.BufferType.SPANNABLE);
                         answerMsg.setOnClickListener(v -> {
                             //Move to msg
                             chatActivity.goToMessage(answerMsgId);
@@ -326,69 +356,75 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             }
 
             if(message.attachments.length()>0) {
-                TaskExecutorManager.getInstance().submitDecryptChatActivity("loadFiles:"+message.msgId,()->{
-                    for(int i=0; i<message.attachments.length(); i++) {
-                        try {
-                            File file = hc.hd.getFileById(message.attachments.getString(i)).get();
-                            HDFile hdFile = hc.hd.getHDFileById(message.attachments.getString(i));
-                            if(hdFile!=null) {
-                                View itemFile;
-                                ImageView fileIcon;
-                                TextView fileName;
-                                String mimeType="folder";
+                for (int i = 0; i < message.attachments.length(); i++) {
+                    try {
+                        File file = hc.hd.getFileById(message.attachments.getString(i)).get();
+                        HDFile hdFile = hc.hd.getHDFileById(message.attachments.getString(i));
+                        if (hdFile != null) {
+                            View itemFile;
+                            ImageView fileIcon;
+                            TextView fileName;
 
-                                if(!hdFile.isFolder) {
-                                    mimeType = getMimeType(hdFile.name);
-                                    if (mimeType == null) {
-                                        mimeType = "*/*"; // Для неизвестных типов
+                            String fileType = hdFile.fileType;
+
+                            if (fileType.equals("image")) {
+                                itemFile = LayoutInflater.from(context).inflate(R.layout.file_image_item, msgv.attachments, false);
+                                fileIcon = itemFile.findViewById(R.id.fileicon);
+
+                                if (hdFile.imageData != null) {
+                                    int originalWidth = hdFile.imageData.getInt("width");
+                                    int originalHeight = hdFile.imageData.getInt("height");
+
+                                    if (originalWidth > 0 && originalHeight > 0) {
+                                        int maxWidthPx = (int) (250 * context.getResources().getDisplayMetrics().density);
+
+                                        float aspectRatio = (float) originalHeight / originalWidth;
+                                        int targetWidth = Math.min(originalWidth, maxWidthPx);
+                                        int targetHeight = (int) (targetWidth * aspectRatio);
+
+                                        ViewGroup.LayoutParams params = fileIcon.getLayoutParams();
+                                        if (params == null) {
+                                            params = new ViewGroup.LayoutParams(targetWidth, targetHeight);
+                                        } else {
+                                            params.width = targetWidth;
+                                            params.height = targetHeight;
+                                        }
+                                        fileIcon.setLayoutParams(params);
                                     }
                                 }
+                                //Load image and cache
+                                chatActivity.runOnUiThread(() -> {
+                                    Glide.with(context)
+                                            .asDrawable()
+                                            .load(file)
+                                            .diskCacheStrategy(DiskCacheStrategy.ALL)
+                                            .skipMemoryCache(false)
+                                            .placeholder(R.drawable.image)
+                                            .error(R.drawable.image)
+                                            .into(fileIcon);
+                                });
 
-                                String format=hc.hd.getFormatType(mimeType);
-
-                                if(format.equals("image")) {
-                                    itemFile=LayoutInflater.from(context).inflate(R.layout.file_image_item, msgv.attachments,false);
-                                    fileIcon=itemFile.findViewById(R.id.fileicon);
-                                    //Load image and cache
-                                    new Handler(Looper.getMainLooper()).post(() -> {
-                                        Glide.with(context)
-                                                .asDrawable()
-                                                .load(file)
-                                                .diskCacheStrategy(DiskCacheStrategy.ALL)
-                                                .skipMemoryCache(false)
-                                                .placeholder(R.drawable.image)
-                                                .error(R.drawable.image)
-                                                .into(fileIcon);
-                                    });
-
-                                    //fileIcon.setImageBitmap(BitmapFactory.decodeFile(hc.hd.getFileById(hdFile.id).getAbsolutePath()));
-                                } else {
-                                    itemFile = LayoutInflater.from(context).inflate(R.layout.file_item, msgv.attachments, false);
-                                    fileIcon = itemFile.findViewById(R.id.fileicon);
-                                    fileIcon.setImageDrawable(AppCompatResources.getDrawable(context,hc.hd.getFileIcon(format)));
-                                    fileName = itemFile.findViewById(R.id.filename);
-                                    fileName.setText(hdFile.name);
-                                }
-                                itemFile.setOnClickListener(v -> openFile(hdFile.id,hdFile.name));
-                                msgv.attachments.addView(itemFile);
+                                //fileIcon.setImageBitmap(BitmapFactory.decodeFile(hc.hd.getFileById(hdFile.id).getAbsolutePath()));
+                            } else {
+                                itemFile = LayoutInflater.from(context).inflate(R.layout.file_item, msgv.attachments, false);
+                                fileIcon = itemFile.findViewById(R.id.fileicon);
+                                fileIcon.setImageDrawable(AppCompatResources.getDrawable(context, hc.hd.getFileIcon(fileType)));
+                                fileName = itemFile.findViewById(R.id.filename);
+                                fileName.setText(hdFile.name);
                             }
-                        } catch (JSONException | ExecutionException | InterruptedException e) {
-                            Log.e(TAG,"MessageAdapter",e);
+                            itemFile.setOnClickListener(v -> openFile(hdFile.id, hdFile.name));
+                            msgv.attachments.addView(itemFile);
                         }
+                    } catch (JSONException | ExecutionException | InterruptedException e) {
+                        Log.e(TAG, "MessageAdapter", e);
                     }
-                    return null;
-                });
+                }
             }
 
             if(message.type==1) {
                 //View commentsDiv = LayoutInflater.from(context).inflate(R.layout.message_comments_count, msgv.messageLL, false);
                 TextView commentsText = new TextView(context);
                 commentsText.setText(context.getString(R.string.count_comments,hc.chatGroupChats.loadCountComments(message.chatId, message.msgId)));
-
-                msgv.commentsDiv.setOnClickListener(v -> {
-                    //Open comments
-                    chatActivity.openComments(message.msgId);
-                });
                 msgv.commentsDiv.addView(commentsText);
             }
 
@@ -462,10 +498,11 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         LinearLayout recordMicDiv;
         LinearLayout messageLL;
         LinearLayout dateBlock;
+        LinearLayout pollVariantsDiv;
         TextView dateText;
         ImageView pixelDiv;
 
-        public MessageViewHolder(@NonNull View itemView) {
+        public MessageViewHolder(@NonNull View itemView, MessageAdapter adapter) {
             super(itemView);
             messageText = itemView.findViewById(R.id.message_text);
             messageTime = itemView.findViewById(R.id.message_time);
@@ -479,20 +516,51 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             dateBlock=itemView.findViewById(R.id.dateBlock);
             dateText=itemView.findViewById(R.id.dateText);
             pixelDiv=itemView.findViewById(R.id.pixelDiv);
+            pollVariantsDiv=itemView.findViewById(R.id.pollVariantsDiv);
+
+            commentsDiv.setOnClickListener(v -> {
+                //Open comments
+                int pos = getAdapterPosition();
+                if (pos != RecyclerView.NO_POSITION) {
+                    HCMessage msg = adapter.messageList.get(pos);
+                    adapter.chatActivity.openComments(msg.msgId);
+                }
+            });
+
+            for (int i=0;i<12;i++) {
+                View pollVarLL = pollVariantsDiv.getChildAt(i);
+                if (pollVarLL != null) {
+                    pollVarLL.setTag(i);
+                    pollVarLL.setOnClickListener(v -> {
+                        int pos = getAdapterPosition();
+                        if (pos != RecyclerView.NO_POSITION) {
+                            HCMessage message = adapter.messageList.get(pos);
+                            int variantIndex=(int)v.getTag();
+                            adapter.hc.chatGroupChats.votePollVariant(message.chatId,message.msgId,variantIndex).thenAccept(b->{
+                                if(b) {
+                                    adapter.chatActivity.runOnUiThread(()->{
+                                        adapter.notifyItemChanged(pos);
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+            }
         }
     }
 
 
     static class SentMessageViewHolder extends MessageViewHolder {
 
-        public SentMessageViewHolder(@NonNull View itemView) {
-            super(itemView);
+        public SentMessageViewHolder(@NonNull View itemView, MessageAdapter adapter) {
+            super(itemView, adapter);
         }
     }
 
     static class ReceivedMessageViewHolder extends MessageViewHolder {
-        public ReceivedMessageViewHolder(@NonNull View itemView) {
-            super(itemView);
+        public ReceivedMessageViewHolder(@NonNull View itemView, MessageAdapter adapter) {
+            super(itemView, adapter);
         }
     }
 
@@ -536,15 +604,6 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             dateBlock=itemView.findViewById(R.id.dateBlock);
             dateText=itemView.findViewById(R.id.dateText);
             createdChat=itemView.findViewById(R.id.createdChat);
-        }
-    }
-
-    static class DateViewHolder extends RecyclerView.ViewHolder {
-        TextView dateText;
-
-        public DateViewHolder(@NonNull View itemView) {
-            super(itemView);
-            dateText = itemView.findViewById(R.id.dateHeader);
         }
     }
 

@@ -176,4 +176,20 @@
     <string name="users_chat_menu">Пользователи чата</string>
     <string name="settings_chat_menu">Настройки чата</string>
     <string name="exit_chat_menu">Выйти из чата</string>
+    <string name="chat_desc_name">Описание чата</string>
+    <string name="poll_menu_add">Добавить</string>
+    <string name="poll_menu_remove">Удалить</string>
+    <string name="poll_menu_variant_1">1 вариант</string>
+    <string name="poll_menu_variant_2">2 вариант</string>
+    <string name="poll_menu_variant_3">3 вариант</string>
+    <string name="poll_menu_variant_4">4 вариант</string>
+    <string name="poll_menu_variant_5">5 вариант</string>
+    <string name="poll_menu_variant_6">6 вариант</string>
+    <string name="poll_menu_variant_7">7 вариант</string>
+    <string name="poll_menu_variant_8">8 вариант</string>
+    <string name="poll_menu_variant_9">9 вариант</string>
+    <string name="poll_menu_variant_10">10 вариант</string>
+    <string name="poll_menu_variant_11">11 вариант</string>
+    <string name="poll_menu_variant_12">12 вариант</string>
+    <string name="zero_poll">0</string>
 </resources>

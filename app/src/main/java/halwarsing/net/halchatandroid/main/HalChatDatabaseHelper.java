@@ -9,7 +9,7 @@ import android.util.Log;
 //Инициализация sql баз данных, создание новых и обновление старых
 public class HalChatDatabaseHelper extends SQLiteOpenHelper {
     private static final String DATABASE_NAME = "halchat.db";
-    private static final int DATABASE_VERSION = 10;
+    private static final int DATABASE_VERSION = 13;
     private static final String TAG = "HCDBC";
     SQLiteDatabase db;
     String[] UIDNames=new String[]{"msg","chats","chatUsers","chatActions","actions"};
@@ -26,8 +26,18 @@ public class HalChatDatabaseHelper extends SQLiteOpenHelper {
         try {
             String createSessionsTable = "CREATE TABLE `sessions` ( `uid` INTEGER primary key AUTOINCREMENT , `id` VARCHAR(100) NOT NULL , `fromId` BIGINT(21) NOT NULL , `selected` TINYINT(1) NOT NULL DEFAULT '1')";
             db.execSQL(createSessionsTable);
-            String createFilesTable = "CREATE TABLE `files` ( `uid` INTEGER primary key AUTOINCREMENT, `id` VARCHAR(100) NOT NULL , " +
-                    "`path` TEXT NOT NULL , `name` TEXT NOT NULL , `fromId` BIGINT(21) NOT NULL, `updated` BIGINT(21) NOT NULL, `isFolder` TINYINT(1) NOT NULL DEFAULT '0')";
+            String createFilesTable = "CREATE TABLE `files` ( " +
+                    "`uid` INTEGER primary key AUTOINCREMENT," +
+                    "`id` VARCHAR(100) NOT NULL ," +
+                    "`path` TEXT NOT NULL," +
+                    "`name` TEXT NOT NULL," +
+                    "`fromId` BIGINT(21) NOT NULL," +
+                    "`updated` BIGINT(21) NOT NULL," +
+                    "`isFolder` TINYINT(1) NOT NULL DEFAULT '0'," +
+                    "`mimeType` VARCHAR(150) NOT NULL DEFAULT '',"+
+                    "`fileType` VARCHAR(20) NOT NULL DEFAULT '',"+
+                    "`imageData` TEXT DEFAULT NULL"+
+                    ")";
             db.execSQL(createFilesTable);
             String createUsersTable="CREATE TABLE `users` (`uid` INTEGER primary key AUTOINCREMENT, `id` BIGINT(21) NOT NULL," +
                     " `nickname` VARCHAR(50) NOT NULL, `icon` VARCHAR(100) NOT NULL, `isBot` TYNYINT(1) NOT NULL DEFAULT '0')";
@@ -51,7 +61,8 @@ public class HalChatDatabaseHelper extends SQLiteOpenHelper {
                     "  `isAllowComments` tinyint(1) NOT NULL DEFAULT '1'," +
                     "  `password` varchar(100) NOT NULL DEFAULT '-1',"+
                     "  `lastMsgId` bigint(21) NOT NULL DEFAULT '-1',"+
-                    "  `isEnd` tinyint(1) NOT NULL DEFAULT '0'"+
+                    "  `isEnd` tinyint(1) NOT NULL DEFAULT '0',"+
+                    "  `description` text NOT NULL DEFAULT ''"+
                     ")";
             db.execSQL(createChatsTable);
             String createMessagesTable = "CREATE TABLE `groupChatsMessages` (" +
@@ -102,6 +113,9 @@ public class HalChatDatabaseHelper extends SQLiteOpenHelper {
 
             //Emoji & Pixels
             createEmojiNPixels(db);
+
+            //Polls
+            addPollVotes(db);
 
             Log.d(TAG,"Database tables created");
         } catch (Exception e) {
@@ -228,6 +242,29 @@ public class HalChatDatabaseHelper extends SQLiteOpenHelper {
                 ")");
     }
 
+    private void addDescriptionColumnChat(SQLiteDatabase rdb) {
+        rdb.execSQL("ALTER TABLE `groupChats` ADD COLUMN `description` TEXT NOT NULL DEFAULT '';");
+    }
+
+    private void addMetadataHD(SQLiteDatabase rdb) {
+        rdb.execSQL("ALTER TABLE `files` ADD COLUMN `mimeType` VARCHAR(150) NOT NULL DEFAULT '';");
+        rdb.execSQL("ALTER TABLE `files` ADD COLUMN `fileType` VARCHAR(20) NOT NULL DEFAULT '';");
+        rdb.execSQL("ALTER TABLE `files` ADD COLUMN `imageData` TEXT DEFAULT NULL;");
+    }
+
+    private void addPollVotes(SQLiteDatabase rdb) {
+        rdb.execSQL("CREATE TABLE IF NOT EXISTS `groupChatsPollVotes` (" +
+                "`uid` INTEGER primary key AUTOINCREMENT,"+
+                "`chatId` INTEGER NOT NULL,"+
+                "`msgId` INTEGER NOT NULL,"+
+                "`variant` INTEGER NOT NULL,"+
+                "`votes` INTEGER NOT NULL DEFAULT '0'"+
+                ")");
+        rdb.execSQL("CREATE INDEX IF NOT EXISTS idx_groupChatsPollVotes ON groupChatsPollVotes(chatId, msgId, variant);");
+        rdb.execSQL("CREATE INDEX IF NOT EXISTS idx_groupChatsPollVotes_groupMsg ON groupChatsPollVotes(chatId, msgId);");
+        rdb.execSQL("CREATE INDEX IF NOT EXISTS idx_groupChatsMessages_type ON groupChatsMessages(chatId, type, isDelete);");
+    }
+
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         try {
@@ -252,6 +289,15 @@ public class HalChatDatabaseHelper extends SQLiteOpenHelper {
             }
             if(oldVersion<10) {
                 createSendMessages(db);
+            }
+            if(oldVersion<11) {
+                addDescriptionColumnChat(db);
+            }
+            if(oldVersion<12) {
+                addMetadataHD(db);
+            }
+            if(oldVersion<13) {
+                addPollVotes(db);
             }
         } catch (Exception e) {
             Log.e(TAG,"Error upgrading",e);
