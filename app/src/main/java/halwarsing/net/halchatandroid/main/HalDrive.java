@@ -10,15 +10,11 @@ import org.json.JSONObject;
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
-import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.net.ssl.HttpsURLConnection;
 
@@ -33,9 +29,7 @@ public class HalDrive {
     private static final String TAG="HCAHD";
     public static final String PATH_HD_FILES="HalDriveFiles/";
     public File directory;
-    private List<HDDownloadOrder> orderDownload=new ArrayList<>();
-    private List<HDUploadOrder> orderUpload=new ArrayList<>();
-    private HashMap<String,CompletableFuture<File>> downloadPromises=new HashMap<>();
+    private final ConcurrentHashMap<String,CompletableFuture<File>> downloadPromises=new ConcurrentHashMap<>();
     private HDUploadFileEvent uploadFileEvent;
 
     //Если файл был загружен с устройства, чтобы не скачивать его, добавляем сразу в базу
@@ -56,31 +50,6 @@ public class HalDrive {
         return getHDFileById(id);
     }
 
-
-    private static class HDDownloadOrder {
-        protected String id;
-        protected boolean isUpdate;
-        public HDDownloadOrder(String id,boolean isUpdate) {
-            this.id=id;
-            this.isUpdate=isUpdate;
-        }
-    }
-
-    private static class HDUploadOrder {
-        protected String path,contentType;
-        int publicType,systemType;
-        File file;
-        boolean isReplace;
-
-        public HDUploadOrder(String path,int publicType,int systemType,File file,String contentType,boolean isReplace) {
-            this.path=path;
-            this.publicType=publicType;
-            this.systemType=systemType;
-            this.file=file;
-            this.contentType=contentType;
-            this.isReplace=isReplace;
-        }
-    }
 
     public HalDrive(Context scontext, SQLiteDatabase sdb, String scodeUser) {
         context=scontext;
@@ -183,18 +152,21 @@ public class HalDrive {
     }
 
     public void uploadHDFile(String path,int publicType,int systemType,File file,String contentType,boolean isReplace) {
-        orderUpload.add(new HDUploadOrder(path,publicType,systemType,file,contentType,isReplace));
-        if(orderUpload.size()==1) {
-            TaskExecutorManager.getInstance().submitUpload("uploadHDFile",()->{
-                HDUploadOrder uo=orderUpload.get(0);
-                String idFile=uploadHDFileWithoutThread(uo.path,uo.publicType,uo.systemType,uo.file,uo.contentType,uo.isReplace);
-                if(idFile!=null) {
-                    uploadFileEvent.onUpload(getHDFileById(idFile));
-                }
-                orderUpload.remove(0);
-                return null;
-            });
-        }
+        String taskTag = "uploadHDFile:" + path + ":" + file.getAbsolutePath();
+        TaskExecutorManager.getInstance().submitUpload(taskTag,()->{
+            String idFile=uploadHDFileWithoutThread(
+                    path,
+                    publicType,
+                    systemType,
+                    file,
+                    contentType,
+                    isReplace
+            );
+            if(idFile!=null && uploadFileEvent!=null) {
+                uploadFileEvent.onUpload(getHDFileById(idFile));
+            }
+            return null;
+        });
     }
 
     //Публикация файла
@@ -247,23 +219,34 @@ public class HalDrive {
         File file=new File(directory,id+".hdf");
 
         Log.e(TAG,id+";"+file.exists());
-        if(!file.exists()) {
-            if(downloadPromises.containsKey(id)) {
-                return downloadPromises.get(id);
+        if(file.exists()) {
+            return CompletableFuture.completedFuture(file);
+        }
+
+        CompletableFuture<File> result = new CompletableFuture<>();
+        CompletableFuture<File> existing = downloadPromises.putIfAbsent(id, result);
+        if (existing != null) {
+            return existing;
+        }
+
+        boolean hasDatabaseEntry = isFileExists(id);
+        downloadFile(id, hasDatabaseEntry).whenComplete((unused, error) -> {
+            File downloadedFile = new File(directory, id + ".hdf");
+
+            if (error != null) {
+                result.completeExceptionally(error);
+            } else if (!downloadedFile.exists()) {
+                result.completeExceptionally(
+                        new IOException("HalDrive file was not downloaded: " + id)
+                );
+            } else {
+                Log.e(TAG, "Файл скачался: " + id);
+                result.complete(downloadedFile);
             }
 
-            CompletableFuture<File> future=new CompletableFuture<>();
-
-            downloadPromises.put(id,future);
-
-            downloadFile(id,false).thenAccept(v->{
-                future.complete(new File(directory,id+".hdf"));
-                Log.e(TAG,"Файл скачался: "+id);
-                downloadPromises.remove(id);
-            }).exceptionally(throwable -> {future.completeExceptionally(throwable);return null;});
-            return future;
-        }
-        return CompletableFuture.completedFuture(file);
+            downloadPromises.remove(id, result);
+        });
+        return result;
     }
 
     public boolean isFileExists(String id){

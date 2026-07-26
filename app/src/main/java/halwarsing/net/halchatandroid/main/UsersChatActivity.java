@@ -2,6 +2,7 @@ package halwarsing.net.halchatandroid.main;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -96,25 +97,22 @@ public class UsersChatActivity extends AppCompatActivity {
         });
 
         usersRecyclerView=findViewById(R.id.users_recycler_view);
-        userAdapter=new UserChatAdapter(new ArrayList<>(),this);
+        userAdapter=new UserChatAdapter(new ArrayList<>(),this,hc);
 
-        //reverse messages
         LinearLayoutManager layoutManager=new LinearLayoutManager(this);
-        layoutManager.setReverseLayout(true);
-        layoutManager.setStackFromEnd(true);
         usersRecyclerView.setLayoutManager(layoutManager);
         usersRecyclerView.setAdapter(userAdapter);
 
-        hc.chatUsers.getChatUsers(chatId).thenAccept(users->{
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    for(int i=0;i<users.size();i++) {
-                        userAdapter.addUser(users.get(i));
-                    }
-                }
-            });
-
+        hc.chatUsers.getChatUsers(chatId).whenComplete((users,error)->{
+            if(error!=null) {
+                Log.e(TAG,"Unable to load chat users",error);
+                return;
+            }
+            if(users==null) {
+                Log.e(TAG,"Chat users response is empty");
+                return;
+            }
+            runOnUiThread(()->userAdapter.replaceUsers(users));
         });
 
     }

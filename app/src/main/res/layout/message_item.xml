@@ -41,6 +41,7 @@
         android:text="@string/service_name"
         android:linksClickable="true"
         android:autoLink="all"
+        android:textIsSelectable="true"
         android:scrollHorizontally="false"
         android:breakStrategy="simple"/>
 
@@ -375,4 +376,13 @@
         android:clickable="true"
         android:focusable="true">
     </LinearLayout>
+
+    <com.google.android.flexbox.FlexboxLayout
+        android:id="@+id/messageReactionsDiv"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        app:alignItems="flex_start"
+        app:flexWrap="wrap"
+        app:justifyContent="flex_start" />
 </merge>

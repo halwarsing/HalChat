@@ -50,17 +50,26 @@ public class ChatListAdapter extends RecyclerView.Adapter<ChatListAdapter.ChatLi
 
         ChatInfoList chat=chatList.get(position);
         holder.chatName.setText(chat.getName());
+        holder.iconChat.setImageResource(R.drawable.ic_add_people);
         HalChatGroupChats.HCEncryptedMessage lmsg=chat.getLastMessage();
 
 
         if(lmsg.msg!=null&&lmsg.msg.type==2) {
             hc.hnUsers.getUserByUserId(lmsg.msg.fromId).thenAccept(fromUser-> {
-                holder.lastMessage.setText("Присоединился ~"+fromUser.nickname);
+                mainActivity.runOnUiThread(() -> {
+                    if(fromUser!=null && isHolderBoundTo(holder,chat.getUid())) {
+                        holder.lastMessage.setText("Присоединился ~"+fromUser.nickname);
+                    }
+                });
             });
 
         } else if(lmsg.msg!=null&&lmsg.msg.type==3) {
             hc.hnUsers.getUserByUserId(lmsg.msg.fromId).thenAccept(fromUser-> {
-                holder.lastMessage.setText("Вышел ~"+fromUser.nickname);
+                mainActivity.runOnUiThread(() -> {
+                    if(fromUser!=null && isHolderBoundTo(holder,chat.getUid())) {
+                        holder.lastMessage.setText("Вышел ~"+fromUser.nickname);
+                    }
+                });
             });
         } else {
             holder.lastMessage.setText(HalChatFunctionsLib.replaceEmojis(mainActivity.getApplicationContext(),holder.lastMessage,hc, lmsg.getMessage(hc)),TextView.BufferType.SPANNABLE);
@@ -70,12 +79,17 @@ public class ChatListAdapter extends RecyclerView.Adapter<ChatListAdapter.ChatLi
 
         hc.hd.getFileById(chat.getIcon()).thenAccept(fileIcon->{
             new Handler(Looper.getMainLooper()).post(() -> {
-                Glide.with(mainActivity)
-                        .load(fileIcon)
-                        .override(150, 150)
-                        .placeholder(R.drawable.ic_add_people)
-                        .into(holder.iconChat);
+                if(isHolderBoundTo(holder,chat.getUid())) {
+                    Glide.with(mainActivity)
+                            .load(fileIcon)
+                            .override(150, 150)
+                            .placeholder(R.drawable.ic_add_people)
+                            .into(holder.iconChat);
+                }
             });
+        }).exceptionally(error -> {
+            Log.e(TAG,"Unable to load chat icon "+chat.getIcon(),error);
+            return null;
         });
 
         holder.itemView.setOnClickListener(v->{
@@ -86,6 +100,13 @@ public class ChatListAdapter extends RecyclerView.Adapter<ChatListAdapter.ChatLi
     @Override
     public int getItemCount() {
         return chatList.size();
+    }
+
+    private boolean isHolderBoundTo(ChatListViewHolder holder,long chatId) {
+        int position=holder.getAdapterPosition();
+        return position!=RecyclerView.NO_POSITION
+                && position<chatList.size()
+                && chatList.get(position).getUid()==chatId;
     }
 
     public static class ChatListViewHolder extends RecyclerView.ViewHolder {

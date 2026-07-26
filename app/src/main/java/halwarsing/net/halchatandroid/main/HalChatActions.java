@@ -7,6 +7,8 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.concurrent.CompletableFuture;
+
 import halwarsing.net.halchatandroid.type.HCAction;
 
 public class HalChatActions {
@@ -36,7 +38,7 @@ public class HalChatActions {
                         if(actions.length()==0)return;
 
                         for(int i=0;i<actions.length();i++) {
-                            processAction(HCAction.getFromJSONAPI(actions.getJSONObject(i)));
+                            processAction(HCAction.getFromJSONAPI(actions.getJSONObject(i))).join();
                         }
 
                         hc.uidSystem.setUID("actions",
@@ -48,7 +50,7 @@ public class HalChatActions {
                     } else {
                         Log.e(TAG,"getActionsError: "+data.getLong("errorCode")+";"+data.getString("error"));
                     }
-                } catch (JSONException e) {
+                } catch (Exception e) {
                     Log.e(TAG,"getActions",e);
                 }
             });
@@ -59,7 +61,9 @@ public class HalChatActions {
 
 
 
-    protected void processAction(HCAction action) {
+    protected CompletableFuture<Void> processAction(HCAction action) {
+        Log.e(TAG,"Action: "+action.type+";"+action.uid);
+        CompletableFuture<?> actionFuture=CompletableFuture.completedFuture(null);
         switch (action.type) {
             case 0:
                 //Delete message
@@ -67,7 +71,9 @@ public class HalChatActions {
                 break;
             case 1:
                 //Edit message
-                hc.chatGroupChats.updateMessage(action.fromChat,action.fromMsg);
+                if(action.newmsg==null) {
+                    actionFuture=hc.chatGroupChats.updateMessage(action.fromChat,action.fromMsg);
+                }
                 break;
             case 3:
                 //Invite User
@@ -98,11 +104,11 @@ public class HalChatActions {
                 break;
             case 13:
                 //Pin message
-                hc.chatGroupChats.updateMessage(action.fromChat,action.fromMsg);
+                actionFuture=hc.chatGroupChats.updateMessage(action.fromChat,action.fromMsg);
                 break;
             case 14:
                 //Unpin message
-                hc.chatGroupChats.updateMessage(action.fromChat,action.fromMsg);
+                actionFuture=hc.chatGroupChats.updateMessage(action.fromChat,action.fromMsg);
                 break;
             case 15:
                 //Join Voice
@@ -110,6 +116,13 @@ public class HalChatActions {
             case 16:
                 //Exit Voice
                 break;
+            case 17:
+                //Message reaction changed
+                if(action.newmsg==null) {
+                    actionFuture=hc.chatGroupChats.updateMessage(action.fromChat,action.fromMsg);
+                }
+                break;
         }
+        return actionFuture.thenApply(ignored->null);
     }
 }

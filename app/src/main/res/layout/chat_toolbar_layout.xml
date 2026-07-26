@@ -62,10 +62,20 @@
                 android:textColor="@color/textColor"
                 android:textSize="@dimen/prestandardText"
                 android:layout_marginStart="5dp"
-                android:layout_marginEnd="40dp"
+                android:layout_marginEnd="8dp"
                 android:maxLines="1"
                 android:ellipsize="end" />
         </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/toolbar_search"
+            android:layout_width="44dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/message_search"
+            android:padding="10dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_search" />
 
         <ImageButton
             android:id="@+id/toolbar_menu"

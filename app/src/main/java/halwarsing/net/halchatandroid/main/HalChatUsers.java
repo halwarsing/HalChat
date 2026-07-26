@@ -11,7 +11,6 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 import halwarsing.net.halchatandroid.type.HCChat;
 import halwarsing.net.halchatandroid.type.HCUser;
@@ -84,29 +83,17 @@ public class HalChatUsers {
                 try {
                     if(res.getInt("errorCode")==0) {
                         JSONArray usersArr=res.getJSONArray("users");
-                        List<CompletableFuture<HCUser>> futures=new ArrayList<>();
+                        List<HCUser> users=new ArrayList<>(usersArr.length());
 
                         for(int i=0;i<usersArr.length();i++) {
-                            //CompletableFuture<HNUser> f=hc.hnUsers.getUserByUserId(usersArr.getJSONObject(i).getLong("id"),true);
-                            final JSONObject u=usersArr.getJSONObject(i);
-                            final long userId=u.getLong("id");
-                            CompletableFuture<HCUser> uf=hc.hnUsers.getUserByUserId(userId,true).thenApply(hnUser -> {
-                                try {
-                                    return getChatUserFromJson(u,chatId,hnUser);
-                                } catch (JSONException e) {
-                                    Log.e(TAG,"getUserByUserId",e);
-                                }
-                                return null;
-                            });
-                            //NAF: AddUser
-                            futures.add(uf);
+                            JSONObject userJson=usersArr.getJSONObject(i);
+                            HNUser hnUser=hc.hnUsers.jsonInfoUserToHNUser(userJson);
+                            hc.hnUsers.addUser(hnUser);
+                            HCUser chatUser=getChatUserFromJson(userJson,chatId,hnUser);
+                            addUser(chatUser);
+                            users.add(chatUser);
                         }
-
-                        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
-                                .thenApply(v->
-                                        futures.stream()
-                                                .map(CompletableFuture::join)
-                                                .collect(Collectors.toList()));
+                        return CompletableFuture.completedFuture(users);
                     } else {
                         Log.e(TAG,"getChatsUsersCW: "+res);
                     }
@@ -122,6 +109,14 @@ public class HalChatUsers {
     }
 
     protected HCUser getChatUserFromJson(JSONObject user,long chatId,HNUser hnUser) throws JSONException {
-        return new HCUser(user.getLong("uid"),user.getLong("id"),chatId,user.getLong("id"),(byte)user.getInt("permissions"),true,hnUser);
+        return new HCUser(
+                -1,
+                user.getLong("uid"),
+                chatId,
+                user.getLong("id"),
+                (byte)user.getInt("permissions"),
+                true,
+                hnUser
+        );
     }
 }
