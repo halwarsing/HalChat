@@ -4,14 +4,14 @@ plugins {
 
 android {
     namespace = "halwarsing.net.halchatandroid"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "halwarsing.net.halchatandroid"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 26
-        versionName = "1.0.2 (Vote or don't vote)"
+        targetSdk = 36
+        versionCode = 27
+        versionName = "1.0.3 (Pin, read and react)"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

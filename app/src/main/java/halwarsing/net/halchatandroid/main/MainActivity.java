@@ -232,22 +232,12 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onEnterChat(HCChat chat) {
-                if(chatListAdapter!=null) {
-                    if(chat==null)return;
-                    try {
-                        HCMessage lastMsg=hc.chatGroupChats.getLastMessage(chat);
-                        if(!lastMsg.isDecrypted) {
-                            lastMsg=hc.chatGroupChats.deencryptMessage(lastMsg,hc.chatGroupChats.getPasswordChat(chat.chatUID));
-                        }
+                updateChatListItem(chat);
+            }
 
-                        HCMessage finalLastMsg = lastMsg;
-                        runOnUiThread(() -> {
-                            chatListAdapter.updateChat(chat, finalLastMsg);
-                        });
-                    } catch (JSONException e) {
-                        Log.e(TAG,"onNewChat",e);
-                    }
-                }
+            @Override
+            public void onChatUpdated(HCChat chat) {
+                updateChatListItem(chat);
             }
         });
 
@@ -262,6 +252,37 @@ public class MainActivity extends AppCompatActivity {
 
         startMainView();
         //context.startActivity(new Intent(MainActivity.this, LogInActivity.class));
+    }
+
+    private void updateChatListItem(HCChat chat) {
+        if(chatListAdapter==null || chat==null) {
+            return;
+        }
+
+        TaskExecutorManager.getInstance().submitDecryptChatActivity(
+                "updateChatList:chatId:" + chat.chatUID,
+                () -> {
+                    try {
+                        HCMessage lastMsg=hc.chatGroupChats.getLastMessage(chat);
+                        if(lastMsg!=null && !lastMsg.isDecrypted) {
+                            lastMsg=hc.chatGroupChats.deencryptMessage(
+                                    lastMsg,
+                                    hc.chatGroupChats.getPasswordChat(chat.chatUID)
+                            );
+                        }
+
+                        HCMessage finalLastMsg = lastMsg;
+                        runOnUiThread(() -> {
+                            if(chatListAdapter!=null) {
+                                chatListAdapter.updateChat(chat, finalLastMsg);
+                            }
+                        });
+                    } catch (JSONException e) {
+                        Log.e(TAG,"updateChatListItem",e);
+                    }
+                    return null;
+                }
+        );
     }
 
     protected void openChat(long uid,String name) {
