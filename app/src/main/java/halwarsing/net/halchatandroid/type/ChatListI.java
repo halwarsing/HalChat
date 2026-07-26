@@ -5,5 +5,6 @@ public interface ChatListI {
     void onNewMessage(HCChat chat, HCMessage message);
     void onDeleteChat(HCChat chat);
     void onEnterChat(HCChat chat);
+    default void onChatUpdated(HCChat chat) {}
 
 }

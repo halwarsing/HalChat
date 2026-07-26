@@ -26,8 +26,6 @@ public class HalNetAPI {
     private final String codeUser;
 
     private static final OkHttpClient staticClient = new OkHttpClient.Builder()
-            .dns(new WhitelistDNS())
-            .addInterceptor(new WLFallbackInterceptor())
             .retryOnConnectionFailure(true)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)

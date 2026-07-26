@@ -12,6 +12,8 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 import halwarsing.net.halchatandroid.type.Emoji;
 import halwarsing.net.halchatandroid.type.EmojiPack;
@@ -25,6 +27,8 @@ public class EmojiPixelSystem {
     private static final String TAG="EPSys";
     private SQLiteDatabase db;
     private HalChat hc;
+    private final ConcurrentHashMap<Long,CompletableFuture<Emoji>> pendingEmojiLoads=
+            new ConcurrentHashMap<>();
 
     public EmojiPixelSystem(SQLiteDatabase db, HalChat hc) {
         this.db=db;
@@ -209,6 +213,49 @@ public class EmojiPixelSystem {
 
         cursor.close();
         return out;
+    }
+
+    public CompletableFuture<Emoji> getEmojiByIdAsync(long emojiId) {
+        Emoji cached=getEmojiById(emojiId);
+        if(cached!=null) {
+            return CompletableFuture.completedFuture(cached);
+        }
+
+        CompletableFuture<Emoji> newFuture=new CompletableFuture<>();
+        CompletableFuture<Emoji> existing=pendingEmojiLoads.putIfAbsent(emojiId,newFuture);
+        if(existing!=null) {
+            return existing;
+        }
+
+        try {
+            JSONObject postData=new JSONObject();
+            postData.put("id",emojiId);
+            hc.hcapi.apiReq("getEmojiPackByEmoji",postData).thenAccept(data->{
+                try {
+                    if(data.optLong("errorCode",-1)!=0) {
+                        newFuture.complete(null);
+                        return;
+                    }
+
+                    long packId=data.getLong("packId");
+                    JSONArray emojis=data.getJSONArray("emoji");
+                    for(int i=0;i<emojis.length();i++) {
+                        addNewEmoji(emojiFromJson(emojis.getJSONObject(i),packId));
+                    }
+                    newFuture.complete(getEmojiById(emojiId));
+                } catch(Exception error) {
+                    newFuture.completeExceptionally(error);
+                }
+            }).exceptionally(error->{
+                newFuture.completeExceptionally(error);
+                return null;
+            });
+        } catch(JSONException error) {
+            newFuture.completeExceptionally(error);
+        }
+
+        newFuture.whenComplete((emoji,error)->pendingEmojiLoads.remove(emojiId,newFuture));
+        return newFuture;
     }
 
     //Pixels

@@ -32,8 +32,6 @@ public class WebSocketService extends Service {
     private void connectWebSocket() {
         Log.e(TAG,"Start connections");
         OkHttpClient client = new OkHttpClient.Builder()
-                .dns(new WhitelistDNS())
-                .addInterceptor(new WLFallbackInterceptor())
                 .retryOnConnectionFailure(true)
                 .pingInterval(30, TimeUnit.SECONDS)
                 .build();

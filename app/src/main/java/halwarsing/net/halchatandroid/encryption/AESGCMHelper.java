@@ -14,6 +14,7 @@ import javax.crypto.spec.GCMParameterSpec;
 public class AESGCMHelper {
     private static final int GCM_TAG_LENGTH=128;
     private static final int IV_LENGTH = 12;
+    private static final Map<Long,SecretKey> SECRET_KEY_CACHE=new ConcurrentHashMap<>();
 
     //Кэш Cipher
     private static final ThreadLocal<Cipher> CIPHER_THREAD_LOCAL = ThreadLocal.withInitial(() -> {
@@ -25,7 +26,7 @@ public class AESGCMHelper {
     });
 
     public static String encrypt(String text,long chatId) throws Exception {
-        SecretKey secretKey=KeyStoreHelper.getSecretKey(chatId);
+        SecretKey secretKey=getSecretKey(chatId);
 
         Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(Cipher.ENCRYPT_MODE,secretKey);
@@ -52,7 +53,7 @@ public class AESGCMHelper {
             throw new IllegalArgumentException("Small array length");
         }
 
-        SecretKey secretKey=KeyStoreHelper.getSecretKey(chatId);
+        SecretKey secretKey=getSecretKey(chatId);
 
         Cipher cipher=CIPHER_THREAD_LOCAL.get();
 
@@ -63,5 +64,21 @@ public class AESGCMHelper {
         byte[] text = cipher.doFinal(data, IV_LENGTH, ciphertextLength);
 
         return new String(text,StandardCharsets.UTF_8);
+    }
+
+    private static SecretKey getSecretKey(long chatId) throws Exception {
+        SecretKey secretKey=SECRET_KEY_CACHE.get(chatId);
+        if(secretKey!=null) {
+            return secretKey;
+        }
+
+        synchronized(SECRET_KEY_CACHE) {
+            secretKey=SECRET_KEY_CACHE.get(chatId);
+            if(secretKey==null) {
+                secretKey=KeyStoreHelper.getSecretKey(chatId);
+                SECRET_KEY_CACHE.put(chatId,secretKey);
+            }
+        }
+        return secretKey;
     }
 }

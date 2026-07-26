@@ -7,6 +7,8 @@ import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -17,15 +19,19 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import com.bumptech.glide.Glide;
+
 import java.util.Objects;
 
 import halwarsing.net.halchatandroid.R;
+import halwarsing.net.halchatandroid.type.HCChat;
 
 //Страница для входа в существующий чат
 public class JoinChatActivity extends AppCompatActivity {
     private final static String TAG="HCAJoinChat";
     private long chatUid;
     private HalChat hc;
+    private HCChat chat;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,9 +60,39 @@ public class JoinChatActivity extends AppCompatActivity {
             Log.e(TAG,"No uid chat");
             finishAndRemoveTask();
         }
+
+        chat=hc.chatGroupChats.getChatInfo(chatUid);
+
+        if(chat==null) {
+            Log.e(TAG,"No uid chat");
+            finishAndRemoveTask();
+        }
+
+        //Variables
         Button enterButton=findViewById(R.id.buttonEnter);
         Button exitChatButton=findViewById(R.id.buttonExitChat);
         EditText inputPass=findViewById(R.id.editTextPassword);
+        TextView nameChat=findViewById(R.id.nameChat);
+        TextView descChat=findViewById(R.id.descChat);
+        ImageView iconChat=findViewById(R.id.iconChat);
+        LinearLayout chatInfoLL=findViewById(R.id.chatInfoLL);
+
+        //Set Info Chat
+        nameChat.setText(chat.name);
+        if(chat.description==null||chat.description.isEmpty()) {
+            chatInfoLL.removeView(descChat);
+        } else {
+            descChat.setText(chat.description);
+        }
+        hc.hd.getFileById(chat.icon).thenAccept(file->{
+            Glide.with(this)
+                    .load(file)
+                    .override(150, 150)
+                    .placeholder(R.drawable.ic_add_people)
+                    .into(iconChat);
+        });
+
+        //Events
         enterButton.setOnClickListener(v->{
             String password=inputPass.getText().toString();
             //FUC проверка на длину и др. параметров пароля

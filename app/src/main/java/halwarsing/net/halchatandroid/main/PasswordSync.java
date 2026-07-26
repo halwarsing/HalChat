@@ -3,6 +3,7 @@ package halwarsing.net.halchatandroid.main;
 import android.database.Cursor;
 import android.util.Log;
 
+import org.bouncycastle.jcajce.provider.asymmetric.RSA;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -221,9 +222,11 @@ public class PasswordSync {
                             Log.e(TAG, "Successfully received password chatUID:" + chatUID);
                             decryptRequestPassword(chatUID,data.getString("psw"));
                         } else if(data.getInt("errorCode")==5) {
-                            Log.e(TAG,"Password didn't receive chatUID:"+chatUID);
+                            //Log.e(TAG,"Password didn't receive chatUID:"+chatUID);
                         } else if(data.getInt("errorCode")==4) {
                             Log.e(TAG,data.getString("error")+" chatUID:"+chatUID);
+                            RSACipher.deletePrivateKeyRSA(hc.context, chatUID);
+                            requestMissingPassword(chatUID);
                         } else {
                             Log.e(TAG,"Error getRequestPasswordAuto: "+data.getString("error")+";"+data.getInt("errorCode"));
                         }

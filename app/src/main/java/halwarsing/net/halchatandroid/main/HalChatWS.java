@@ -143,7 +143,10 @@ public class HalChatWS extends WebSocketListener {
         if(text.equals("pong")){
             if(!isAuth) {
                 isAuth=true;
-                hc.runEvent("onAuth",new JSONObject());
+                TaskExecutorManager.getInstance().submitRealtime("ws-auth", () -> {
+                    hc.runEvent("onAuth",new JSONObject());
+                    return null;
+                });
             }
             return;
         }
@@ -177,25 +180,30 @@ public class HalChatWS extends WebSocketListener {
         }
 
         if(data.has("rtype")) {
-            String rtype=data.optString("rtype");
-            if(rtype.equals("act")) {
-                //onNewAction(data);
-                HCAction action=HCAction.getFromJSON(data);
-                hc.runEvent("onNewAction",data,action);
-            } else if(rtype.equals("msg")) {
-                //onNewMessage(data);
-                try {
-                    HCMessage msg=hc.chatGroupChats.jsonMsgToHCMSG(data);
-                    HCChat chat=hc.chatGroupChats.getChatInfo(msg.chatId);
-                    hc.runEvent("onNewMessage",data,msg,chat);
-                } catch (JSONException e) {
-                    Log.e(TAG,"msg",e);
-                }
-            } else if(rtype.equals("sendPSW")) {
-                hc.runEvent("onReceivePassword",data);
-            } else if(rtype.equals("checkPSW")) {
-                hc.runEvent("onCheckPassword",data);
+            TaskExecutorManager.getInstance().submitRealtime("ws-realtime-event", () -> {
+                handleRealtimeEvent(data);
+                return null;
+            });
+        }
+    }
+
+    private void handleRealtimeEvent(JSONObject data) {
+        String rtype=data.optString("rtype");
+        if(rtype.equals("act")) {
+            HCAction action=HCAction.getFromJSON(data);
+            hc.runEvent("onNewAction",data,action);
+        } else if(rtype.equals("msg")) {
+            try {
+                HCMessage msg=hc.chatGroupChats.jsonMsgToHCMSG(data);
+                HCChat chat=hc.chatGroupChats.getChatInfo(msg.chatId);
+                hc.runEvent("onNewMessage",data,msg,chat);
+            } catch (JSONException e) {
+                Log.e(TAG,"msg",e);
             }
+        } else if(rtype.equals("sendPSW")) {
+            hc.runEvent("onReceivePassword",data);
+        } else if(rtype.equals("checkPSW")) {
+            hc.runEvent("onCheckPassword",data);
         }
     }
 

@@ -16,4 +16,5 @@
     <color name="fourthBackground">#1F2230</color>
     <color name="accent1">#ff2fb9</color>
     <color name="accent2">#6a5cff</color>
+    <color name="backgroundHint">#B816181F</color>
 </resources>

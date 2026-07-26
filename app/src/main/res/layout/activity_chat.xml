@@ -5,23 +5,201 @@
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background"
     android:orientation="vertical"
     tools:context=".main.ChatActivity"
-    android:fitsSystemWindows="true">
-            <include
-                android:id="@+id/toolbar"
-                layout="@layout/chat_toolbar_layout"/>
+    android:fitsSystemWindows="true"
+    android:background="@drawable/gradient_background_selector">
+        <include
+            android:id="@+id/toolbar"
+            layout="@layout/chat_toolbar_layout"/>
+
+        <LinearLayout
+            android:id="@+id/messageSearchPanel"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:background="@color/thirdBackground"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="4dp"
+            android:visibility="gone">
+
+            <EditText
+                android:id="@+id/messageSearchInput"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:background="@drawable/round_input"
+                android:hint="@string/message_search_hint"
+                android:imeOptions="actionSearch"
+                android:importantForAutofill="no"
+                android:inputType="text"
+                android:maxLines="1"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:singleLine="true" />
+
+            <TextView
+                android:id="@+id/messageSearchCounter"
+                android:layout_width="56dp"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="@string/message_search_empty"
+                android:textColor="@color/textColor"
+                android:textSize="@dimen/tinyText" />
+
+            <ImageButton
+                android:id="@+id/messageSearchPrevious"
+                android:layout_width="36dp"
+                android:layout_height="44dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/message_search_previous"
+                android:padding="12dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/up" />
+
+            <ImageButton
+                android:id="@+id/messageSearchNext"
+                android:layout_width="36dp"
+                android:layout_height="44dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/message_search_next"
+                android:padding="12dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/down" />
+
+            <ImageButton
+                android:id="@+id/messageSearchClose"
+                android:layout_width="40dp"
+                android:layout_height="44dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/message_search_close"
+                android:padding="11dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_close" />
+        </LinearLayout>
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
 
             <!-- Messages -->
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/messages_recycler_view"
                 android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
+                android:layout_height="match_parent"
                 android:paddingStart ="5dp"
-                android:paddingEnd="5dp"
-                android:background="@drawable/gradient_background_selector"/>
+                android:paddingEnd="5dp"/>
+
+            <ImageButton
+                android:id="@+id/scrollToBottomButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_gravity="bottom|end"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="12dp"
+                android:background="@drawable/scroll_to_bottom_background"
+                android:contentDescription="@string/down"
+                android:elevation="8dp"
+                android:padding="15dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/down"
+                android:visibility="gone" />
+
+            <!-- Pinned Messages -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:id="@+id/pinnedMsgDiv"
+                android:layout_marginStart="10dp"
+                android:layout_marginEnd="10dp">
+                <LinearLayout
+                    android:id="@+id/pinnedMsg"
+                    android:layout_width="wrap_content"
+                    android:layout_height="50dp"
+                    android:background="@drawable/background_hint"
+                    android:baselineAligned="false"
+                    android:orientation="horizontal">
+                    <LinearLayout
+                        android:layout_width="30dp"
+                        android:layout_height="50dp"
+                        android:orientation="horizontal"
+                        android:background="@drawable/background_hint_left"
+                        android:gravity="center">
+                        <ImageButton
+                            android:layout_width="25dp"
+                            android:layout_height="25dp"
+                            android:id="@+id/pinnedMsgBtn"
+                            android:contentDescription="@string/pin_btn_desc"
+                            android:src="@drawable/pin"
+                            android:background="@color/transparent"
+                            android:scaleType="fitCenter"/>
+                    </LinearLayout>
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="50dp"
+                        android:layout_marginStart="5dp"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:orientation="horizontal">
+
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/desc_exit_chat"
+                                android:id="@+id/pinnedMsgNickname"
+                                android:textSize="@dimen/standardText"
+                                android:maxLines="1"
+                                android:scrollHorizontally="true"
+                                android:ellipsize="end"/>
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/chat_name"
+                                android:id="@+id/pinnedMsgText"
+                                android:layout_marginStart="5dp"
+                                android:maxLines="1"
+                                android:scrollHorizontally="true"
+                                android:textSize="@dimen/standardText"
+                                android:ellipsize="end"/>
+                        </LinearLayout>
+                    </LinearLayout>
+                    <LinearLayout
+                        android:layout_width="20dp"
+                        android:layout_height="50dp"
+                        android:orientation="vertical"
+                        android:layout_marginStart="5dp"
+                        android:background="@drawable/background_hint_right"
+                        android:gravity="center">
+                        <ImageButton
+                            android:layout_width="15dp"
+                            android:layout_height="20dp"
+                            android:id="@+id/btnPinnedUp"
+                            android:background="@color/transparent"
+                            android:contentDescription="@string/up_desc"
+                            android:src='@drawable/up'
+                            android:scaleType="fitCenter"/>
+                        <ImageButton
+                            android:layout_width="15dp"
+                            android:layout_height="20dp"
+                            android:id="@+id/btnPinnedDown"
+                            android:background="@color/transparent"
+                            android:contentDescription="@string/down"
+                            android:src='@drawable/down'
+                            android:scaleType="fitCenter" />
+                    </LinearLayout>
+
+                </LinearLayout>
+
+            </LinearLayout>
+        </FrameLayout>
 
         <!-- Поле ввода и кнопка отправки -->
         <LinearLayout
@@ -245,6 +423,109 @@
                     android:padding="8dp"
                     android:scrollbars="vertical"
                     android:visibility="gone"/>
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/poll_menu"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@color/background"
+                android:elevation="10dp"
+                android:visibility="gone">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center">
+                    <Button
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:id="@+id/btn_poll_menu_add"
+                        android:text="@string/poll_menu_add"/>
+                    <Button
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:id="@+id/btn_poll_menu_remove"
+                        android:text="@string/poll_menu_remove"/>
+                </LinearLayout>
+                <LinearLayout
+                    android:id="@+id/poll_menu_variants"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="10dp">
+                    <EditText
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="@string/poll_menu_variant_1"/>
+                    <EditText
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:hint="@string/poll_menu_variant_2"/>
+                    <EditText
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:visibility="gone"
+                        android:hint="@string/poll_menu_variant_3"/>
+                    <EditText
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:visibility="gone"
+                        android:hint="@string/poll_menu_variant_4"/>
+                    <EditText
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:visibility="gone"
+                        android:hint="@string/poll_menu_variant_5"/>
+                    <EditText
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:visibility="gone"
+                        android:hint="@string/poll_menu_variant_6"/>
+                    <EditText
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:visibility="gone"
+                        android:hint="@string/poll_menu_variant_7"/>
+                    <EditText
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:visibility="gone"
+                        android:hint="@string/poll_menu_variant_8"/>
+                    <EditText
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:visibility="gone"
+                        android:hint="@string/poll_menu_variant_9"/>
+                    <EditText
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:visibility="gone"
+                        android:hint="@string/poll_menu_variant_10"/>
+                    <EditText
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:visibility="gone"
+                        android:hint="@string/poll_menu_variant_11"/>
+                    <EditText
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:visibility="gone"
+                        android:hint="@string/poll_menu_variant_12"/>
+                </LinearLayout>
             </LinearLayout>
         </LinearLayout>
 </LinearLayout>

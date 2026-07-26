@@ -24,6 +24,9 @@ public class TaskExecutorManager {
     //API (HTTP)
     private static final int API_THREADS = 3;
 
+    //Ordered processing of incoming WebSocket events
+    private static final int REALTIME_THREADS = 1;
+
     //Decrypt messages in ChatActivity (HIGH PRIORITY)
     private static final int DECRYPT_CHATACTIVITY_THREADS = CORE_POOL_SIZE;
 
@@ -36,10 +39,12 @@ public class TaskExecutorManager {
     private final ThreadPoolExecutor uploadExecutor;
     private final ThreadPoolExecutor sendExecutor;
     private final ThreadPoolExecutor apiExecutor;
+    private final ThreadPoolExecutor realtimeExecutor;
     private final ThreadPoolExecutor chatActivityDecrypt;
 
     private final Map<String, List<Future<?>>> taskMap = new ConcurrentHashMap<>();
-    private final Map<String, List<CompletableFuture<?>>> completableFutureMap=new ConcurrentHashMap<>();
+    private final Map<String, CompletableFuture<?>> completableFutureMap=new ConcurrentHashMap<>();
+    private final Map<String, Future<?>> uniqueTaskMap = new ConcurrentHashMap<>();
 
     private static TaskExecutorManager instance;
 
@@ -53,6 +58,7 @@ public class TaskExecutorManager {
         uploadExecutor=createExecutor(UPLOAD_THREADS);
         sendExecutor=createExecutor(SEND_THREADS);
         apiExecutor=createExecutor(API_THREADS);
+        realtimeExecutor=createExecutor(REALTIME_THREADS);
         chatActivityDecrypt=createExecutor(DECRYPT_CHATACTIVITY_THREADS);
     }
 
@@ -77,8 +83,7 @@ public class TaskExecutorManager {
     }
 
     public <T> Future<T> submitUpload(String tag, Callable<T> task) {
-        if(taskMap.containsKey(tag)&&!taskMap.get(tag).isEmpty())return (Future<T>) taskMap.get(tag).get(0);
-        return submitTask(uploadExecutor, tag, task);
+        return submitUniqueTask(uploadExecutor, tag, task);
     }
 
     public <T> Future<T> submitDecrypt(String tag, Callable<T> task) {
@@ -94,8 +99,27 @@ public class TaskExecutorManager {
     }
 
     public <T> Future<T> submitChatSync(String tag, Callable<T> task) {
-        if(taskMap.containsKey(tag)&&!taskMap.get(tag).isEmpty())return (Future<T>) taskMap.get(tag).get(0);
-        return submitTask(chatsSync, tag, task);
+        return submitUniqueTask(chatsSync, tag, task);
+    }
+
+    public <T> CompletableFuture<T> submitCompletableChatSync(String tag, Callable<T> task) {
+        return submitCompletableTask(chatsSync, tag, task);
+    }
+
+    public <T> CompletableFuture<T> submitCompletableChatSyncTask(Callable<T> task) {
+        CompletableFuture<T> future=new CompletableFuture<>();
+        try {
+            chatsSync.execute(()->{
+                try {
+                    future.complete(task.call());
+                } catch(Exception error) {
+                    future.completeExceptionally(error);
+                }
+            });
+        } catch(RejectedExecutionException error) {
+            future.completeExceptionally(error);
+        }
+        return future;
     }
 
     public <T> CompletableFuture<T> submitCompletableUserSync(String tag, Callable<T> task) {
@@ -110,9 +134,18 @@ public class TaskExecutorManager {
         return submitTask(apiExecutor, tag, task);
     }
 
+    public <T> Future<T> submitRealtime(String tag, Callable<T> task) {
+        return submitTask(realtimeExecutor, tag, task);
+    }
+
     private <T> Future<T> submitTask(ThreadPoolExecutor executor, String tag, Callable<T> task) {
-        Future<T> future = executor.submit(task);
-        taskMap.computeIfAbsent(tag, k -> Collections.synchronizedList(new ArrayList<>())).add(future);
+        FutureTask<T> future = createTrackedFuture(tag, task);
+        List<Future<?>> tasks = taskMap.computeIfAbsent(
+                tag,
+                k -> Collections.synchronizedList(new ArrayList<>())
+        );
+        tasks.add(future);
+        executeTrackedFuture(executor, tag, future);
         return future;
     }
 
@@ -120,33 +153,123 @@ public class TaskExecutorManager {
         return submitTask(chatActivityDecrypt, tag, task);
     }
 
-    private <T> CompletableFuture<T> submitCompletableTask(ThreadPoolExecutor executor, String tag, Callable<T> task) {
-        List<CompletableFuture<?>> existing = completableFutureMap.get(tag);
-        if (existing != null && !existing.isEmpty()) {
-            @SuppressWarnings("unchecked")
-            CompletableFuture<T> existingFuture = (CompletableFuture<T>) existing.get(0);
-            return existingFuture;
+    @SuppressWarnings("unchecked")
+    private <T> Future<T> submitUniqueTask(ThreadPoolExecutor executor, String tag, Callable<T> task) {
+        while (true) {
+            Future<?> existing = uniqueTaskMap.get(tag);
+            if (existing != null && !existing.isDone() && !existing.isCancelled()) {
+                return (Future<T>) existing;
+            }
+
+            FutureTask<T> future = new FutureTask<>(task) {
+                @Override
+                protected void done() {
+                    uniqueTaskMap.remove(tag, this);
+                }
+            };
+
+            boolean installed = existing == null
+                    ? uniqueTaskMap.putIfAbsent(tag, future) == null
+                    : uniqueTaskMap.replace(tag, existing, future);
+
+            if (installed) {
+                try {
+                    executor.execute(future);
+                } catch (RejectedExecutionException error) {
+                    uniqueTaskMap.remove(tag, future);
+                    throw error;
+                }
+                return future;
+            }
+        }
+    }
+
+    private <T> FutureTask<T> createTrackedFuture(String tag, Callable<T> task) {
+        return new FutureTask<>(task) {
+            @Override
+            protected void done() {
+                removeTrackedFuture(tag, this);
+            }
+        };
+    }
+
+    private void executeTrackedFuture(ThreadPoolExecutor executor, String tag, FutureTask<?> future) {
+        try {
+            executor.execute(future);
+        } catch (RejectedExecutionException error) {
+            removeTrackedFuture(tag, future);
+            throw error;
+        }
+    }
+
+    private void removeTrackedFuture(String tag, Future<?> future) {
+        List<Future<?>> tasks = taskMap.get(tag);
+        if (tasks == null) {
+            return;
         }
 
-        CompletableFuture<T> completableFuture = CompletableFuture.supplyAsync(() -> {
-            try {
-                return task.call();
-            } catch (Exception e) {
-                throw new CompletionException(e);
+        synchronized (tasks) {
+            tasks.remove(future);
+            if (tasks.isEmpty()) {
+                taskMap.remove(tag, tasks);
             }
-        }, executor);
+        }
+    }
 
-        completableFutureMap.computeIfAbsent(tag, k -> Collections.synchronizedList(new ArrayList<>())).add(completableFuture);
-        return completableFuture;
+    @SuppressWarnings("unchecked")
+    private <T> CompletableFuture<T> submitCompletableTask(ThreadPoolExecutor executor, String tag, Callable<T> task) {
+        while (true) {
+            CompletableFuture<?> existing = completableFutureMap.get(tag);
+            if (existing != null && !existing.isDone() && !existing.isCancelled()) {
+                return (CompletableFuture<T>) existing;
+            }
+
+            CompletableFuture<T> future = new CompletableFuture<>();
+            boolean installed = existing == null
+                    ? completableFutureMap.putIfAbsent(tag, future) == null
+                    : completableFutureMap.replace(tag, existing, future);
+
+            if (installed) {
+                try {
+                    executor.execute(() -> {
+                        try {
+                            if (!future.isCancelled()) {
+                                future.complete(task.call());
+                            }
+                        } catch (Exception error) {
+                            future.completeExceptionally(error);
+                        } finally {
+                            completableFutureMap.remove(tag, future);
+                        }
+                    });
+                } catch (RejectedExecutionException error) {
+                    completableFutureMap.remove(tag, future);
+                    future.completeExceptionally(error);
+                }
+                return future;
+            }
+        }
     }
 
     // Отмена всех задач по тегу
     public void cancelTasks(String tag) {
+        Future<?> uniqueFuture = uniqueTaskMap.remove(tag);
+        if (uniqueFuture != null) {
+            uniqueFuture.cancel(true);
+        }
+
         List<Future<?>> futures = taskMap.remove(tag);
         if (futures != null) {
-            for (Future<?> f : futures) {
-                f.cancel(true);
+            synchronized (futures) {
+                for (Future<?> f : futures) {
+                    f.cancel(true);
+                }
             }
+        }
+
+        CompletableFuture<?> completableFuture = completableFutureMap.remove(tag);
+        if (completableFuture != null) {
+            completableFuture.cancel(true);
         }
     }
 
@@ -161,6 +284,10 @@ public class TaskExecutorManager {
         uploadExecutor.shutdownNow();
         sendExecutor.shutdownNow();
         apiExecutor.shutdownNow();
+        realtimeExecutor.shutdownNow();
+        chatActivityDecrypt.shutdownNow();
         taskMap.clear();
+        completableFutureMap.clear();
+        uniqueTaskMap.clear();
     }
 }

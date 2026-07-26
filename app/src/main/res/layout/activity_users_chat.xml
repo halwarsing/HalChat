@@ -13,17 +13,12 @@
     <include
         android:id="@+id/toolbar"
         layout="@layout/chat_no_toolbar_layout"/>
-    <ScrollView
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
         android:background="@drawable/gradient_background_selector">
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="vertical"
-            android:clickable="true"
-            android:focusable="true"
-            android:background="@color/background">
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -38,7 +33,7 @@
                     android:textSize="@dimen/standardText"
                     android:text="@string/invite_users"/>
                 <ImageView
-                    android:id="@+id/toolbar_menu"
+                    android:id="@+id/invite_users_icon"
                     android:layout_width="40dp"
                     android:layout_height="40dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
@@ -53,7 +48,6 @@
                 android:layout_height="0dp"
                 android:layout_weight="1"
                 android:padding="8dp"/>
-        </LinearLayout>
         <!-- Invite Users -->
-    </ScrollView>
+    </LinearLayout>
 </LinearLayout>

@@ -7,6 +7,7 @@ import android.util.Log;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.File;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
@@ -63,7 +64,20 @@ public class HalNetUsers {
     }
 
     protected HNUser jsonInfoUserToHNUser(JSONObject data) throws JSONException {
-        return new HNUser(-1, data.getLong("id"),data.getString("nickname"),data.getString("icon"),data.getInt("isBot")==1,null);
+        String icon=data.getString("icon");
+        File localIcon=new File(hd.directory,icon+".hdf");
+        hd.getFileById(icon).exceptionally(throwable -> {
+            Log.e(TAG,"Unable to load user icon "+icon,throwable);
+            return null;
+        });
+        return new HNUser(
+                -1,
+                data.getLong("id"),
+                data.getString("nickname"),
+                icon,
+                data.getInt("isBot")==1,
+                localIcon.getAbsolutePath()
+        );
     }
 
     protected Cursor getUserCursorByUserId(long userId) {
@@ -77,21 +91,22 @@ public class HalNetUsers {
 
     protected CompletableFuture<HNUser> getUserFromCursor(Cursor userCursor) {
         if(userCursor==null)return CompletableFuture.completedFuture(null);
-        CompletableFuture<HNUser> future=new CompletableFuture<>();
-        hd.getFileById(userCursor.getString(3)).thenAccept(file->{
-            future.complete(new HNUser(
-                    userCursor.getLong(0),
-                    userCursor.getLong(1),
-                    userCursor.getString(2),
-                    userCursor.getString(3),
-                    userCursor.getInt(4)==1,
-                    file.getAbsolutePath()));
-        }).exceptionally(throwable -> {
-            future.completeExceptionally(throwable);
+
+        long uid=userCursor.getLong(0);
+        long id=userCursor.getLong(1);
+        String nickname=userCursor.getString(2);
+        String icon=userCursor.getString(3);
+        boolean isBot=userCursor.getInt(4)==1;
+        File localIcon=new File(hd.directory,icon+".hdf");
+
+        hd.getFileById(icon).exceptionally(throwable -> {
+            Log.e(TAG,"Unable to load user icon "+icon,throwable);
             return null;
         });
 
-        return future;
+        return CompletableFuture.completedFuture(
+                new HNUser(uid,id,nickname,icon,isBot,localIcon.getAbsolutePath())
+        );
     }
 
     protected CompletableFuture<HNUser> getUserByUserId(long userId,boolean isLoad) throws ExecutionException, InterruptedException {

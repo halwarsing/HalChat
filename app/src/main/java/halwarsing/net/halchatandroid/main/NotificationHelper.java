@@ -71,7 +71,14 @@ public class NotificationHelper {
         NotificationCompat.MessagingStyle messagingStyle = messages.getOrDefault(msg.msgId,new NotificationCompat.MessagingStyle(sender)
                         .setConversationTitle(user.nickname));
 
-        messagingStyle.addMessage(msg.decryptedMessage, msg.time, sender);
+        String message=msg.decryptedMessage;
+        if(msg.type==2) {
+            message="Новый участник";
+        } else if(msg.type==3) {
+            message="Покинул чат";
+        }
+
+        messagingStyle.addMessage(message, msg.time, sender);
 
         messages.put(msg.msgId, messagingStyle);
         chatMessages.put(msg.chatId,messages);
@@ -141,7 +148,15 @@ public class NotificationHelper {
         NotificationCompat.MessagingStyle messagingStyle = messages.getOrDefault(msg.msgId,new NotificationCompat.MessagingStyle(sender)
                 .setConversationTitle(chat.name));
 
-        messagingStyle.addMessage(msg.decryptedMessage, msg.time, sender);
+
+        String message=msg.decryptedMessage;
+        if(msg.type==2) {
+            message="Новый участник";
+        } else if(msg.type==3) {
+            message="Покинул чат";
+        }
+
+        messagingStyle.addMessage(message, msg.time, sender);
 
         messages.put(msg.msgId, messagingStyle);
         chatMessages.put(msg.chatId,messages);

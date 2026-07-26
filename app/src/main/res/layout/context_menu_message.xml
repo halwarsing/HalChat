@@ -1,25 +1,55 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="wrap_content"
+    android:layout_width="280dp"
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:background="@drawable/menu_background"
     android:elevation="8dp"
     android:padding="8dp" >
+    <GridView
+        android:id="@+id/reaction_emoji_grid"
+        android:layout_width="match_parent"
+        android:layout_height="112dp"
+        android:horizontalSpacing="4dp"
+        android:numColumns="3"
+        android:overScrollMode="ifContentScrolls"
+        android:scrollbars="vertical"
+        android:stretchMode="columnWidth"
+        android:verticalSpacing="4dp" />
+
     <TextView
         android:id="@+id/answer_message"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:padding="8dp"
-        android:text="Ответить"
+        android:text="@string/answer_msg"
         android:textSize="16sp"
         android:textColor="@color/white"/>
+
+    <TextView
+        android:id="@+id/copy_message"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:padding="8dp"
+        android:text="@string/copy_message"
+        android:textColor="@color/white"
+        android:textSize="16sp" />
+
+    <TextView
+        android:id="@+id/pin_message"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:padding="8dp"
+        android:text="@string/pin_message"
+        android:textColor="@color/white"
+        android:textSize="16sp" />
+
     <TextView
         android:id="@+id/edit_message"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:padding="8dp"
-        android:text="Редактировать"
+        android:text="@string/edit_msg"
         android:textSize="16sp"
         android:textColor="@color/white" />
 
@@ -28,7 +58,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:padding="8dp"
-        android:text="Удалить"
+        android:text="@string/delete_msg"
         android:textSize="16sp"
         android:textColor="@color/white" />
 </LinearLayout>

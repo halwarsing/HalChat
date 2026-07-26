@@ -7,6 +7,7 @@ import android.os.Looper;
 import android.util.Log;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -26,6 +27,8 @@ public class JoinChatByLinkActivity extends AppCompatActivity {
     private ImageView iconChat;
     private TextView nameChat;
     private Button joinChatBtn;
+    private TextView descChat;
+    private LinearLayout chatInfoLL;
     private HalChat hc;
     private HCChat chat;
     private static final String TAG="JCBLA";
@@ -48,6 +51,8 @@ public class JoinChatByLinkActivity extends AppCompatActivity {
         iconChat=findViewById(R.id.iconChat);
         nameChat=findViewById(R.id.nameChat);
         joinChatBtn=findViewById(R.id.joinChatBtn);
+        descChat=findViewById(R.id.descChat);
+        chatInfoLL=findViewById(R.id.chatInfoLL);
 
         //Get Info
         String chatId=getIntent().getStringExtra("chatId");
@@ -68,6 +73,12 @@ public class JoinChatByLinkActivity extends AppCompatActivity {
             });
 
             nameChat.setText(c.name);
+
+            if(chat.description==null||chat.description.isEmpty()) {
+                chatInfoLL.removeView(descChat);
+            } else {
+                descChat.setText(chat.description);
+            }
         });
 
         //OnClick

@@ -22,4 +22,12 @@
         android:scaleType="fitCenter"
         android:background="?attr/selectableItemBackgroundBorderless"/>
 
+    <ImageButton
+        android:id="@+id/btn_poll"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:src="@drawable/ic_poll"
+        android:scaleType="fitCenter"
+        android:background="?attr/selectableItemBackgroundBorderless"/>
+
 </LinearLayout>
