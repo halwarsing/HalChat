@@ -111,6 +111,8 @@ public class HalChat {
         he=new HalEncryption();
 
         sharedClient=new OkHttpClient.Builder()
+                .dns(new WhitelistDNS())
+                .addInterceptor(new WLFallbackInterceptor())
                 .retryOnConnectionFailure(true)
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(30,TimeUnit.SECONDS)
@@ -385,7 +387,7 @@ public class HalChat {
             int type=action.type;
             if(type==0)  {
                 chatGroupChats.deleteMessageById(action.fromMsg);
-            } else if((type==1||type==17)&&action.jdata.has("newmsg")) {
+            } else if(type==1&&action.jdata.has("newmsg")) {
                 action.newmsg=chatGroupChats.editMessage(chatGroupChats.jsonMsgToHCMSG(action.jdata.getJSONObject("newmsg")));
             } else if(type==3) {
                 JSONObject pdata=new JSONObject();
@@ -403,7 +405,6 @@ public class HalChat {
                 }
 
             }
-            hcActions.processAction(action);
             //if(chatInterface==null)return;
             //chatInterface.onNewAction(action);
         } catch (Exception e) {
@@ -415,9 +416,7 @@ public class HalChat {
         try {
             //HCMessage msg=chatGroupChats.jsonMsgToHCMSG(data);
             HCMessage msg=(HCMessage)args[1];
-            if(!chatGroupChats.addMessageToChatIfAbsent(msg)) {
-                return;
-            }
+            msg=chatGroupChats.addMessageToChat(msg,true);
             msg=chatGroupChats.decryptMessage(msg,chatGroupChats.getPasswordChat(msg.chatId));
 
             if (chatListI != null) {

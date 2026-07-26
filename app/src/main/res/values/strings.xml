@@ -192,23 +192,4 @@
     <string name="poll_menu_variant_11">11 вариант</string>
     <string name="poll_menu_variant_12">12 вариант</string>
     <string name="zero_poll">0</string>
-    <string name="pin_btn_desc">Кнопка для отключения закреплённых сообщений</string>
-    <string name="up_desc">Вверх</string>
-    <string name="down">Вниз</string>
-    <string name="message_search">Поиск сообщений</string>
-    <string name="message_search_hint">Найти сообщение…</string>
-    <string name="message_search_empty">0 из 0</string>
-    <string name="message_search_results">%1$d из %2$d</string>
-    <string name="message_search_loading">…</string>
-    <string name="message_search_previous">Предыдущее найденное сообщение</string>
-    <string name="message_search_next">Следующее найденное сообщение</string>
-    <string name="message_search_close">Закрыть поиск</string>
-    <string name="answer_msg">Ответить</string>
-    <string name="edit_msg">Редактировать</string>
-    <string name="copy_message">Копировать текст</string>
-    <string name="message_copied">Текст скопирован</string>
-    <string name="pin_message">Закрепить</string>
-    <string name="unpin_message">Открепить</string>
-    <string name="pin_message_failed">Не удалось изменить закрепление</string>
-    <string name="delete_msg">Удалить</string>
 </resources>
