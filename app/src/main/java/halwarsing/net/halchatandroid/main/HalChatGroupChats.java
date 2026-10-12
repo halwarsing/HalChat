@@ -17,12 +17,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.net.HttpURLConnection;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -30,8 +25,8 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
-import javax.net.ssl.HttpsURLConnection;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -43,25 +38,29 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import halwarsing.net.halchatandroid.encryption.AESGCMHelper;
+import halwarsing.net.halchatandroid.type.AILoRA;
+import halwarsing.net.halchatandroid.type.AIModel;
+import halwarsing.net.halchatandroid.type.ChatPlugin;
 import halwarsing.net.halchatandroid.type.HCChat;
 import halwarsing.net.halchatandroid.type.HCFile;
 import halwarsing.net.halchatandroid.type.HCMessage;
+import halwarsing.net.halchatandroid.type.HCPlugin;
 import halwarsing.net.halchatandroid.type.HCUser;
 import halwarsing.net.halchatandroid.type.HNUser;
 import halwarsing.net.halchatandroid.type.MessageReaction;
+import halwarsing.net.halchatandroid.type.PersonAI;
 import halwarsing.net.halchatandroid.type.Pixel;
-import okhttp3.FormBody;
 import okhttp3.HttpUrl;
 import okhttp3.MultipartBody;
-import okhttp3.OkHttpClient;
 import okhttp3.Request;
-import okhttp3.RequestBody;
 
 
 //Класс для взаимодействия с чатами
 public class HalChatGroupChats {
     private static final String TAG="HCAHCGC";
     private static final int MESSAGE_SEARCH_INDEX_BATCH_SIZE=200;
+    private static final String QUEUED_ATTACHMENTS_KEY="_queuedAttachments";
+    private static final long[] SEND_RETRY_DELAYS_MS={1000,2000,5000,10000,30000};
     private final SQLiteDatabase db;
     private final String codeUser;
     private final long userId;
@@ -77,6 +76,11 @@ public class HalChatGroupChats {
     private final ConcurrentHashMap<Long,Long> lastChatIds=new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Long,CompletableFuture<HCMessage>> messageUpdateChains=
             new ConcurrentHashMap<>();
+    private final Set<Long> readMessages=ConcurrentHashMap.newKeySet();
+    private final Set<Long> sendMessagesInFlight=ConcurrentHashMap.newKeySet();
+    private final ConcurrentHashMap<Long,Integer> sendMessageRetryAttempts=new ConcurrentHashMap<>();
+    private final AtomicBoolean sendMessageRetryScheduled=new AtomicBoolean(false);
+    private final Handler sendMessageRetryHandler=new Handler(Looper.getMainLooper());
     private final AtomicBoolean checkChatsInProgress = new AtomicBoolean(false);
     private final AtomicBoolean checkChatsAgain = new AtomicBoolean(false);
 
@@ -146,6 +150,329 @@ public class HalChatGroupChats {
         return future;
     }
 
+    public boolean hasMessagesChat(long chatId) {
+        Cursor cursor=db.rawQuery("SELECT * FROM `groupChatsMessages` WHERE `chatId`=? LIMIT 1",new String[]{String.valueOf(chatId)});
+        if(cursor.moveToFirst()) {
+            cursor.close();
+            return true;
+        }
+
+        cursor.close();
+        return false;
+    }
+
+    //Get AI Model
+    public AIModel getAIModel(long ai_model) {
+        Cursor cursor=db.rawQuery("SELECT * FROM `ai_models` WHERE `modelId`=?",new String[]{String.valueOf(ai_model)});
+        if(cursor.moveToFirst()) {
+            AIModel out=AIModel.fromCursor(cursor);
+            cursor.close();
+            return out;
+        }
+
+        cursor.close();
+        return null;
+    }
+
+    //Get AI LoRA
+    public AILoRA getAILoRA(long ai_lora) {
+        Cursor cursor=db.rawQuery("SELECT * FROM `ai_lora` WHERE `loraId`=?",new String[]{String.valueOf(ai_lora)});
+        if(cursor.moveToFirst()) {
+            AILoRA out=AILoRA.fromCursor(cursor);
+            cursor.close();
+            return out;
+        }
+
+        cursor.close();
+        return null;
+    }
+
+    //Add Plugin If Not Exists
+    public void addPlugin(HCPlugin plugin) {
+        Cursor cursor=db.rawQuery("SELECT * FROM `plugins` WHERE `pluginId`=?",new String[]{String.valueOf(plugin.pluginId)});
+
+        if(cursor.moveToFirst()) {
+            //Проверка на новую версию
+            HCPlugin origPlugin=HCPlugin.fromCursor(cursor);
+            if(plugin.versionCode>origPlugin.versionCode) {
+                db.execSQL("UPDATE `plugins` SET `versionCode`=?, `version`=? WHERE `pluginId`=?",new String[]{String.valueOf(plugin.versionCode),plugin.version,String.valueOf(plugin.pluginId)});
+                //Чтобы обновила файл при повторной загрузке
+                hc.hd.deleteFile(plugin.plugin);
+            }
+
+            cursor.close();
+            return;
+        }
+
+        cursor.close();
+        db.execSQL("INSERT INTO `plugins` (`pluginId`, `name`, `description`, `icon`, `plugin`, `type`, `version`, `versionCode`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",new String[]{
+                String.valueOf(plugin.pluginId),
+                plugin.name,
+                plugin.description,
+                plugin.icon,
+                plugin.plugin,
+                String.valueOf(plugin.type),
+                plugin.version,
+                String.valueOf(plugin.versionCode)
+        });
+    }
+
+    //Add Chat Plugin If Not Exists
+    public void addChatPlugin(ChatPlugin chatPlugin) {
+        Cursor cursor=db.rawQuery("SELECT * FROM `groupChatsPlugins` WHERE `chatPluginId`=?",new String[]{String.valueOf(chatPlugin.chatPluginId)});
+
+        if(cursor.moveToFirst()) {
+            cursor.close();
+            return;
+        }
+
+        cursor.close();
+        db.execSQL("INSERT INTO `groupChatsPlugins` (`chatPluginId`, `chatId`, `pluginId`, `dataId`, `dataType`) VALUES (?, ?, ?, ?, ?)",new String[]{
+                String.valueOf(chatPlugin.chatPluginId),
+                String.valueOf(chatPlugin.chatId),
+                String.valueOf(chatPlugin.plugin.pluginId),
+                String.valueOf(chatPlugin.dataId),
+                String.valueOf(chatPlugin.dataType)
+        });
+    }
+
+    //Add AI Person If Not Exists
+    public void addPersonAI(PersonAI personAI) {
+        Cursor cursor=db.rawQuery("SELECT * FROM `ai_person` WHERE `personId`=?",new String[]{String.valueOf(personAI.personId)});
+
+        if(cursor.moveToFirst()) {
+            cursor.close();
+            return;
+        }
+
+        cursor.close();
+        db.execSQL("INSERT INTO `ai_person` (`personId`, `name`, `description`, `version`, `pluginId`, `ai_model`, `ai_loras`, `deviceConfig`, `aiConfig`, `personConfig`) VALUES (?,?,?,?,?,?,?,?,?,?)",new String[]{
+                String.valueOf(personAI.personId),
+                personAI.name,
+                personAI.description,
+                String.valueOf(personAI.version),
+                String.valueOf(personAI.pluginId),
+                String.valueOf(personAI.ai_model),
+                personAI.ai_loras.toString(),
+                personAI.deviceConfig.toString(),
+                personAI.aiConfig.toString(),
+                personAI.personConfig.toString()
+        });
+    }
+
+    //Add AI Model If Not Exists
+    public void addAIModel(AIModel model) {
+        Cursor cursor=db.rawQuery("SELECT * FROM `ai_models` WHERE `modelId`=?",new String[]{String.valueOf(model.modelId)});
+
+        if(cursor.moveToFirst()) {
+            cursor.close();;
+            return;
+        }
+
+        cursor.close();
+        db.execSQL("INSERT INTO `ai_models` (`modelId`, `files`, `name`, `description`, `countFiles`, `sizeFiles`, `quantanization`, `countParameters`, `isMobileSupport`) VALUES (?,?,?,?,?,?,?,?,?)",new String[]{
+                String.valueOf(model.modelId),
+                model.files.toString(),
+                model.name,
+                model.description,
+                String.valueOf(model.countFiles),
+                String.valueOf(model.sizeFiles),
+                String.valueOf(model.quantanization),
+                String.valueOf(model.countParameters),
+                model.isMobileSupport?"1":"0"
+        });
+    }
+
+    //Add AI LoRA If Not Exists
+    public void addAILoRA(AILoRA loRA) {
+        Cursor cursor=db.rawQuery("SELECT * FROM `ai_lora` WHERE `loraId`=?",new String[]{String.valueOf(loRA.loraId)});
+
+        if(cursor.moveToFirst()) {
+            cursor.close();
+            return;
+        }
+
+        cursor.close();
+        db.execSQL("INSERT INTO `ai_lora` (`loraId`, `name`, `description`, `file`, `size`, `ai`) VALUES(?,?,?,?,?,?)",new String[]{
+                String.valueOf(loRA.loraId),
+                loRA.name,
+                loRA.description,
+                loRA.file,
+                String.valueOf(loRA.size),
+                String.valueOf(loRA.ai)
+        });
+    }
+
+    public CompletableFuture<List<ChatPlugin>> getPluginsChat(long chatId) {
+        CompletableFuture<List<ChatPlugin>> future=new CompletableFuture<>();
+
+        JSONObject postData=new JSONObject();
+        try {
+            postData.put("chatId",chatId);
+            hc.hcapi.apiReq("getInfoPlugins",postData).thenAccept(odata->{
+                try {
+                    if(odata.getLong("errorCode")==0) {
+                        JSONArray plugins=odata.getJSONArray("plugins");
+
+                        for(int j=0;j<plugins.length();j++) {
+                            JSONObject data=plugins.getJSONObject(j);
+
+                            long pluginId = data.getLong("pluginId");
+                            String name = data.getString("name");
+                            String description = data.getString("description");
+                            String icon = data.getString("icon");
+                            String plugin = data.getString("plugin");
+                            String version = data.getString("version");
+                            int versionCode = data.getInt("versionCode");
+                            long chatPluginId = data.getLong("chatPluginId");
+                            long dataId = data.getLong("dataId");
+                            int dataType = data.getInt("dataType");
+                            int type = data.getInt("type");
+
+                            HCPlugin pluginNew = new HCPlugin(0, pluginId, name, description, icon, plugin, type, version, versionCode);
+                            ChatPlugin chatPluginNew = new ChatPlugin(pluginNew, 0, chatPluginId, chatId, dataType, dataId);
+
+                            addPlugin(pluginNew);
+                            addChatPlugin(chatPluginNew);
+
+                            switch (dataType) {
+                                //Person AI
+                                case 1:
+                                    JSONObject dataJ = data.getJSONObject("data");
+                                    PersonAI personAI = new PersonAI(0, dataJ.getLong("uid"), dataJ.getString("name"), dataJ.getString("description"), dataJ.getInt("version"),
+                                            pluginNew.pluginId, dataJ.getLong("ai_model"), dataJ.getJSONArray("ai_loras"), dataJ.getJSONObject("deviceConfig"), dataJ.getJSONObject("aiConfig"),
+                                            dataJ.getJSONObject("personConfig"));
+
+                                    addPersonAI(personAI);
+
+                                    AIModel aiModel = new AIModel(0, personAI.ai_model, dataJ.getJSONArray("ai_model_files"), dataJ.getString("ai_model_name"),
+                                            dataJ.getString("ai_model_desc"), dataJ.getInt("ai_model_count_files"), dataJ.getLong("ai_model_size_files"),
+                                            dataJ.getInt("ai_model_quantanization"), (float) dataJ.getDouble("ai_model_cparameters"), dataJ.getBoolean("ai_model_is_mobile_support"));
+
+                                    addAIModel(aiModel);
+
+                                    JSONArray ai_loras_info = dataJ.getJSONArray("ai_loras_info");
+                                    JSONArray ai_loras_files = dataJ.getJSONArray("ai_loras_files");
+
+                                    for (int i = 0; i < personAI.ai_loras.length(); i++) {
+                                        JSONArray loraIDWeight=personAI.ai_loras.getJSONArray(i);
+                                        long loraId = loraIDWeight.getLong(0);
+                                        JSONObject loraInfo = ai_loras_info.getJSONObject(i);
+                                        String loraFile = ai_loras_files.getString(i);
+
+                                        AILoRA loRA = new AILoRA(0, loraId, loraInfo.getString("name"), loraInfo.getString("description"), loraFile, loraInfo.getLong("size"), personAI.ai_model);
+                                        addAILoRA(loRA);
+                                    }
+
+                                    break;
+                                default:
+                                    break;
+                            }
+                        }
+                    }
+
+                    List<ChatPlugin> out=new ArrayList<>();
+                    Cursor cursor=db.rawQuery("SELECT * FROM `groupChatsPlugins` WHERE `chatId`=?", new String[]{String.valueOf(chatId)});
+
+                    if(cursor.moveToFirst()) {
+                        int pluginIdIDX=cursor.getColumnIndex("pluginId");
+                        if(pluginIdIDX>=0) {
+                            do {
+                                Cursor aiCursor = db.rawQuery("SELECT * FROM `plugins` WHERE `pluginId`=?", new String[]{cursor.getString(pluginIdIDX)});
+
+                                if(aiCursor.moveToFirst()) {
+                                    HCPlugin plugin=HCPlugin.fromCursor(aiCursor);
+                                    ChatPlugin chatPlugin=ChatPlugin.fromCursor(cursor,plugin);
+
+                                    //Значит указаны данные и их нужно получить
+                                    if(chatPlugin.dataType>0&&chatPlugin.dataId>0) {
+                                        switch (chatPlugin.dataType) {
+                                            case 1:
+                                                //Person AI
+                                                Cursor personAICursor=db.rawQuery("SELECT * FROM `ai_person` WHERE `personId`=?",new String[]{String.valueOf(chatPlugin.dataId)});
+
+                                                if(personAICursor.moveToFirst()) {
+                                                    chatPlugin.data=PersonAI.fromCursor(personAICursor);
+                                                } else {
+                                                    Log.e(TAG,"Person AI no found!");
+                                                }
+
+                                                personAICursor.close();
+                                                break;
+                                            default:
+                                                break;
+                                        }
+                                    }
+
+                                    out.add(chatPlugin);
+                                }
+
+                                aiCursor.close();
+                            } while (cursor.moveToNext());
+                        }
+                    }
+
+                    cursor.close();
+
+                    future.complete(out);
+                } catch (JSONException e) {
+                    Log.e(TAG,"Error JSON getInfoPlugins: ",e);
+                }
+            }).exceptionally(v->{
+
+                List<ChatPlugin> out=new ArrayList<>();
+                Cursor cursor=db.rawQuery("SELECT * FROM `groupChatsPlugins` WHERE `chatId`=?", new String[]{String.valueOf(chatId)});
+
+                if(cursor.moveToFirst()) {
+                    int pluginIdIDX=cursor.getColumnIndex("pluginId");
+                    if(pluginIdIDX>=0) {
+                        do {
+                            Cursor aiCursor = db.rawQuery("SELECT * FROM `plugins` WHERE `pluginId`=?", new String[]{cursor.getString(pluginIdIDX)});
+
+                            if(aiCursor.moveToFirst()) {
+                                HCPlugin plugin=HCPlugin.fromCursor(aiCursor);
+                                ChatPlugin chatPlugin=ChatPlugin.fromCursor(cursor,plugin);
+
+                                //Значит указаны данные и их нужно получить
+                                if(chatPlugin.dataType>0&&chatPlugin.dataId>0) {
+                                    switch (chatPlugin.dataType) {
+                                        case 1:
+                                            //Person AI
+                                            Cursor personAICursor=db.rawQuery("SELECT * FROM `ai_person` WHERE `personId`=?",new String[]{String.valueOf(chatPlugin.dataId)});
+
+                                            if(personAICursor.moveToFirst()) {
+                                                chatPlugin.data=PersonAI.fromCursor(personAICursor);
+                                            } else {
+                                                Log.e(TAG,"Person AI no found!");
+                                            }
+
+                                            personAICursor.close();
+                                            break;
+                                        default:
+                                            break;
+                                    }
+                                }
+
+                                out.add(chatPlugin);
+                            }
+
+                            aiCursor.close();
+                        } while (cursor.moveToNext());
+                    }
+                }
+
+                cursor.close();
+
+                future.complete(out);
+                return null;
+            });
+        } catch (JSONException e) {
+            Log.e(TAG,"Error JSON getPluginsChat: ",e);
+        }
+
+        return future;
+    }
+
     private static class HCFileOrder {
         protected File file;
         protected String contentType;
@@ -197,7 +524,7 @@ public class HalChatGroupChats {
                             HCChat chat=getChatFromJSON(data.getJSONObject("data"));
                             if (!hasChatInDB(chatId)) {
                                 Log.e(TAG,"NEW CHAT: "+chat.icon);
-                                db.execSQL("INSERT INTO `groupChats` (`chatUID`, `id`, `name`, `icon`, `fromMe`, `created`, `publicType`, `isAllowMessages`, `chatType`, `isAllowComments`, `description`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", new String[]{
+                                db.execSQL("INSERT OR IGNORE INTO `groupChats` (`chatUID`, `id`, `name`, `icon`, `fromMe`, `created`, `publicType`, `isAllowMessages`, `chatType`, `isAllowComments`, `description`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", new String[]{
                                         String.valueOf(chat.chatUID),
                                         chat.id,
                                         chat.name,
@@ -211,7 +538,7 @@ public class HalChatGroupChats {
                                         chat.description
                                 });
                             }
-                            hc.passwordSync.requestMissingPassword(chat.uid);
+                            hc.passwordSync.requestMissingPassword(chat.chatUID);
                             hc.hd.addHalDriveFile(chat.icon);
                             hc.onNewChat(getChatInfo(chatId));
                         } else {
@@ -233,29 +560,88 @@ public class HalChatGroupChats {
         Cursor sendCur=db.rawQuery("SELECT * FROM `sendMessages`",null);
         if(sendCur.moveToFirst()) {
             do {
+                long queueUid=-1;
                 try {
-                    final long uid=sendCur.getLong(0);
+                    queueUid=sendCur.getLong(sendCur.getColumnIndexOrThrow("uid"));
+                    final long uid=queueUid;
+                    if(!sendMessagesInFlight.add(uid))continue;
                     long t=System.currentTimeMillis();
                     JSONObject mdata=null;
-                    String sdata=sendCur.getString(11);
+                    String sdata=sendCur.getString(sendCur.getColumnIndexOrThrow("data"));
                     if(sdata!=null&&!sdata.equals("null")&&!sdata.equals("NULL"))mdata=new JSONObject(sdata);
-                    HCMessage msg=new HCMessage(-1,-1,sendCur.getLong(1),sendCur.getLong(2),t/1000L,sendCur.getLong(3),sendCur.getLong(4),
-                            sendCur.getString(5),new JSONArray(),sendCur.getString(6),sendCur.getString(7),sendCur.getString(8),
-                            HalChatFunctionsLib.hexStringToByteArray(sendCur.getString(9)), false,false,false,sendCur.getInt(10),true,true,
-                            mdata,sendCur.getLong(12),sendCur.getLong(13),false,sendCur.getInt(14));
-                    //TODO Сделать отправку опроса после появления интернета
+                    JSONArray attachments=new JSONArray();
+                    if(mdata!=null) {
+                        JSONArray queuedAttachments=mdata.optJSONArray(QUEUED_ATTACHMENTS_KEY);
+                        if(queuedAttachments!=null)attachments=queuedAttachments;
+                        mdata.remove(QUEUED_ATTACHMENTS_KEY);
+                        if(mdata.length()==0)mdata=null;
+                    }
+                    HCMessage msg=new HCMessage(-1,-1,
+                            sendCur.getLong(sendCur.getColumnIndexOrThrow("chatId")),
+                            sendCur.getLong(sendCur.getColumnIndexOrThrow("fromId")),t/1000L,
+                            sendCur.getLong(sendCur.getColumnIndexOrThrow("answerMsg")),
+                            sendCur.getLong(sendCur.getColumnIndexOrThrow("commentMsg")),
+                            sendCur.getString(sendCur.getColumnIndexOrThrow("message")),attachments,
+                            sendCur.getString(sendCur.getColumnIndexOrThrow("soundMsg")),
+                            sendCur.getString(sendCur.getColumnIndexOrThrow("dataBot")),
+                            sendCur.getString(sendCur.getColumnIndexOrThrow("recordMic")),
+                            HalChatFunctionsLib.hexStringToByteArray(sendCur.getString(sendCur.getColumnIndexOrThrow("encryptId"))),
+                            false,false,false,sendCur.getInt(sendCur.getColumnIndexOrThrow("type")),true,true,
+                            mdata,sendCur.getLong(sendCur.getColumnIndexOrThrow("shareId")),
+                            sendCur.getLong(sendCur.getColumnIndexOrThrow("pixelId")),false,
+                            sendCur.getInt(sendCur.getColumnIndexOrThrow("v")));
 
-                    sendMessage(msg,null).thenAccept(data->{
-                        if(data!=null) {
-                            db.execSQL("DELETE FROM `sendMessages` WHERE `uid`=?", new String[]{String.valueOf(uid)});
+                    sendMessage(msg,null).whenComplete((data,error)->{
+                        try {
+                            if(error!=null) {
+                                Log.e(TAG,"Unable to resend queued message "+uid,error);
+                                scheduleSendMessagesRetry(uid);
+                                return;
+                            }
+                            if(data==null||data.optInt("errorCode",-1)!=0) {
+                                Log.e(TAG,"Queued message was not accepted: "+data);
+                                return;
+                            }
+
+                            db.delete("sendMessages","uid=?",new String[]{String.valueOf(uid)});
+                            sendMessageRetryAttempts.remove(uid);
+                            JSONObject deliveredJSON=data.optJSONObject("message");
+                            if(deliveredJSON!=null) {
+                                HCMessage delivered=jsonMsgToHCMSG(deliveredJSON);
+                                hc.runEvent("onNewMessage",data,delivered);
+                            }
+                        } catch(Exception parseError) {
+                            Log.e(TAG,"Unable to process queued message response",parseError);
+                        } finally {
+                            sendMessagesInFlight.remove(uid);
                         }
                     });
-                } catch (JSONException e) {
+                } catch (Exception e) {
+                    if(queueUid!=-1)sendMessagesInFlight.remove(queueUid);
                     Log.e(TAG,"SM",e);
                 }
             } while (sendCur.moveToNext());
         }
         sendCur.close();
+    }
+
+    protected void onNetworkAvailable() {
+        sendMessageRetryAttempts.clear();
+        checkSendMessages();
+    }
+
+    private void scheduleSendMessagesRetry(long uid) {
+        int attempt=sendMessageRetryAttempts.merge(uid,1,Integer::sum);
+        if(attempt>SEND_RETRY_DELAYS_MS.length)return;
+        if(!sendMessageRetryScheduled.compareAndSet(false,true))return;
+
+        sendMessageRetryHandler.postDelayed(()->{
+            sendMessageRetryScheduled.set(false);
+            TaskExecutorManager.getInstance().submitSend("queuedMessagesRetry",()->{
+                checkSendMessages();
+                return null;
+            });
+        },SEND_RETRY_DELAYS_MS[attempt-1]);
     }
 
     //Проверка новых сообщений
@@ -1154,7 +1540,7 @@ public class HalChatGroupChats {
         return updateFuture;
     }
 
-    private HCMessage fetchAndUpdateMessage(long chatId,long msgId) throws Exception {
+    private HCMessage fetchAndUpdateMessage(long chatId,long msgId) {
         try {
             JSONObject postData=new JSONObject();
             postData.put("chatId",chatId);
@@ -1165,15 +1551,14 @@ public class HalChatGroupChats {
                     HCMessage msg=jsonMsgToHCMSG(res.getJSONObject("msg"));
                     return editMessage(msg);
                 }
-                throw new IllegalStateException("getMessage failed: "+res.optString("error"));
+                Log.e(TAG,"getMessage failed: "+res.optString("error"));
             } catch(JSONException error) {
                 Log.e(TAG,"getMessageUM: ",error);
-                throw error;
             }
         } catch(Exception error) {
             Log.e(TAG,"Error in updateMessage",error);
-            throw error;
         }
+        return null;
     }
 
     protected CompletableFuture<Boolean> setReaction(long chatId,long msgId,long emojiId) {
@@ -1206,6 +1591,48 @@ public class HalChatGroupChats {
             future.completeExceptionally(error);
         }
         return future;
+    }
+
+    protected CompletableFuture<Boolean> readMessage(long chatId,long msgId) {
+        CompletableFuture<Boolean> future=new CompletableFuture<>();
+        try {
+            JSONObject postData=new JSONObject();
+            postData.put("chatId",chatId);
+            postData.put("msgId",msgId);
+            hc.hcapi.apiReq("readMessage",postData).thenAccept(res->{
+                if(res.optInt("errorCode",-1)==0) {
+                    markMessageRead(chatId,msgId);
+                    future.complete(true);
+                } else {
+                    Log.e(TAG,"readMessage: "+res.optString("error"));
+                    future.complete(false);
+                }
+            }).exceptionally(error->{
+                Log.e(TAG,"readMessage",error);
+                future.completeExceptionally(error);
+                return null;
+            });
+        } catch(JSONException error) {
+            future.completeExceptionally(error);
+        }
+        return future;
+    }
+
+    protected synchronized void markMessageRead(long chatId,long msgId) {
+        ContentValues values=new ContentValues();
+        values.put("isReceived",1);
+        int updated=db.update(
+                "groupChatsMessages",
+                values,
+                "chatId=? AND msgId=? AND isDelete=0",
+                new String[]{String.valueOf(chatId),String.valueOf(msgId)}
+        );
+        if(updated==0) {
+            readMessages.add(msgId);
+        } else {
+            readMessages.remove(msgId);
+        }
+        if(hc.chatInterface!=null)hc.chatInterface.onReadMessage(chatId,msgId);
     }
 
     protected CompletableFuture<Boolean> pinMessage(long chatId,long msgId) {
@@ -1251,6 +1678,7 @@ public class HalChatGroupChats {
                 parseMessageReactions(msg.optJSONObject("reactions")),
                 parseSelectedReaction(msg.opt("selectedReaction"))
         );
+        if(readMessages.remove(message.msgId))message.isReceived=true;
         return message;
     }
 
@@ -1497,9 +1925,10 @@ public class HalChatGroupChats {
                 db.beginTransaction();
             }
             try {
-                db.execSQL("UPDATE `groupChatsMessages` SET `message`=?, `encryptId`=?, `attachments`=?, `time`=?, `answerMsg`=?, `commentMsg`=?, `type`=?, `soundMsg`=?, `recordMic`=?, `isHalEnc`=?, `isPinned`=?, `data`=? WHERE `msgId`=? AND `isDelete`=0",new String[]{
+                db.execSQL("UPDATE `groupChatsMessages` SET `message`=?, `encryptId`=?, `attachments`=?, `time`=?, `answerMsg`=?, `commentMsg`=?, `type`=?, `soundMsg`=?, `recordMic`=?, `isSended`=?, `isReceived`=?, `isHalEnc`=?, `isPinned`=?, `data`=? WHERE `msgId`=? AND `isDelete`=0",new String[]{
                         message.message, HalChatFunctionsLib.bytesToHex(message.encryptId), message.attachments.toString(), String.valueOf(message.time), String.valueOf(message.answerMsg), String.valueOf(message.commentMsg),
-                        String.valueOf(message.type), message.soundMsg, message.recordMic, message.isHalEnc?"1":"0", message.isPinned?"1":"0",
+                        String.valueOf(message.type), message.soundMsg, message.recordMic,message.isSended?"1":"0",message.isReceived?"1":"0",
+                        message.isHalEnc?"1":"0", message.isPinned?"1":"0",
                         message.data==null?null:message.data.toString(),String.valueOf(message.msgId)
                 });
                 storeMessageReactions(message);
@@ -1530,6 +1959,7 @@ public class HalChatGroupChats {
 
     protected synchronized boolean addMessageToChatIfAbsent(HCMessage msg) throws JSONException {
         if(!hasStoredMessageById(msg.msgId)) {
+            if(readMessages.remove(msg.msgId))msg.isReceived=true;
             if(!lastChatIds.containsKey(msg.chatId)||msg.msgId>lastChatIds.get(msg.chatId)) {
                 lastChatIds.put(msg.chatId,msg.msgId);
             }
@@ -1911,31 +2341,114 @@ public class HalChatGroupChats {
             return msg;
         }
         if(msg.isHalEnc) {
-            msg.setDecryptedMessage(new String(hc.he.decodeByHash(HalChatFunctionsLib.hexStringToByteArray(msg.message), password + HalChatFunctionsLib.bytesToHex(msg.encryptId), 10, 100000, ""), StandardCharsets.UTF_8));
+            String decryptedMessage=tryDecryptHalMessage(msg.message,msg,password);
+            if(decryptedMessage==null)return msg;
+            msg.setDecryptedMessage(decryptedMessage);
 
             if(hasPoll) {
                 decryptPollVariants(msg,password,true);
             }
             return msg;
         }
-        try {
-            msg.setDecryptedMessage(AESGCMHelper.decrypt(HalChatFunctionsLib.hexStringToByteArray(msg.message),msg.chatId));
+        LocalMessageDecryption localDecryption=decryptLocalMessage(msg,password);
+        if(localDecryption==null)return msg;
+        msg.setDecryptedMessage(localDecryption.text);
 
-            if(hasPoll) {
-                decryptPollVariants(msg,password,false);
+        if(msg.uid!=-1&&(localDecryption.layers>1||localDecryption.usedLegacyEncryption)) {
+            try {
+                String repairedMessage=AESGCMHelper.encrypt(localDecryption.text,msg.chatId);
+                msg.message=repairedMessage;
+                db.execSQL(
+                        "UPDATE `groupChatsMessages` SET `message`=?, `isHalEnc`=0 WHERE `uid`=?",
+                        new String[]{repairedMessage,String.valueOf(msg.uid)}
+                );
+            } catch(Exception e) {
+                Log.e(TAG,"Unable to repair message encryption for msgId="+msg.msgId,e);
             }
-
-            return msg;
-        } catch (Exception e) {
-            //Log.e(TAG,"Error in decryptMessage",e);
         }
-        msg.setDecryptedMessage(new String(hc.he.decodeByHash(HalChatFunctionsLib.hexStringToByteArray(msg.message), password + HalChatFunctionsLib.bytesToHex(msg.encryptId), 10, 100000, ""), StandardCharsets.UTF_8));
 
         if(hasPoll) {
-            decryptPollVariants(msg,password,true);
+            decryptPollVariants(msg,password,false);
         }
 
         return msg;
+    }
+
+    private LocalMessageDecryption decryptLocalMessage(HCMessage msg,String password) {
+        String encryptedLayer=msg.message;
+        String decryptedText=null;
+        int decryptedLayers=0;
+
+        // Some records produced by older clients were wrapped in the local AES
+        // encryption more than once. Peel authenticated layers until the value is
+        // plain text. A user-authored hex string is preserved because the next GCM
+        // authentication attempt simply fails.
+        for(int i=0;i<3;i++) {
+            try {
+                decryptedText=AESGCMHelper.decrypt(
+                        HalChatFunctionsLib.hexStringToByteArray(encryptedLayer),
+                        msg.chatId
+                );
+                decryptedLayers++;
+            } catch(Exception error) {
+                if(decryptedLayers>0) {
+                    return new LocalMessageDecryption(decryptedText,decryptedLayers,false);
+                }
+
+                // Compatibility with rows saved by old versions with an incorrect
+                // isHalEnc flag. Unlike the previous unconditional fallback, accept
+                // the result only when it is valid readable UTF-8.
+                String legacyText=tryDecryptHalMessage(encryptedLayer,msg,password);
+                if(legacyText!=null) {
+                    return new LocalMessageDecryption(legacyText,0,true);
+                }
+                Log.w(TAG,"Unable to decrypt local message msgId="+msg.msgId,error);
+                return null;
+            }
+
+            if(!isHexString(decryptedText)) {
+                return new LocalMessageDecryption(decryptedText,decryptedLayers,false);
+            }
+            encryptedLayer=decryptedText;
+        }
+
+        return new LocalMessageDecryption(decryptedText,decryptedLayers,false);
+    }
+
+    private String tryDecryptHalMessage(String encryptedMessage,HCMessage msg,String password) {
+        if(!isHexString(encryptedMessage))return null;
+        try {
+            String decryptedMessage=new String(
+                    hc.he.decodeByHash(
+                            HalChatFunctionsLib.hexStringToByteArray(encryptedMessage),
+                            password+HalChatFunctionsLib.bytesToHex(msg.encryptId),
+                            10,
+                            100000,
+                            ""
+                    ),
+                    StandardCharsets.UTF_8
+            );
+            if(decryptedMessage.indexOf('\uFFFD')!=-1)return null;
+            for(int i=0;i<decryptedMessage.length();i++) {
+                char c=decryptedMessage.charAt(i);
+                if(Character.isISOControl(c)&&!Character.isWhitespace(c))return null;
+            }
+            return decryptedMessage;
+        } catch(Exception error) {
+            return null;
+        }
+    }
+
+    private static class LocalMessageDecryption {
+        final String text;
+        final int layers;
+        final boolean usedLegacyEncryption;
+
+        LocalMessageDecryption(String text,int layers,boolean usedLegacyEncryption) {
+            this.text=text;
+            this.layers=layers;
+            this.usedLegacyEncryption=usedLegacyEncryption;
+        }
     }
 
     private void decryptPollVariants(HCMessage msg,String password,boolean isHalEncrypted) {
@@ -2198,23 +2711,31 @@ public class HalChatGroupChats {
     }
 
     protected CompletableFuture<JSONObject> sendMessage(HCMessage msg, List<String> variants) {
-        String encryptId;
-        if(!msg.isHalEnc) {
-            encryptId = generateEncryptId(System.currentTimeMillis(), msg.chatId);
-            msg.encryptId = HalChatFunctionsLib.hexStringToByteArray(encryptId);
-            msg.message = encryptMessage(msg.decryptedMessage, getPasswordChat(msg.chatId), msg.encryptId);
-        } else {
-            encryptId=HalChatFunctionsLib.bytesToHex(msg.encryptId);
-        }
+        prepareMessageForSend(msg);
+        String encryptId=HalChatFunctionsLib.bytesToHex(msg.encryptId);
 
+        JSONArray variantsJSON=null;
         if(variants!=null&&variants.size()>1&&variants.size()<13) {
 
             try {
-                JSONArray variantsJSON = new JSONArray();
+                variantsJSON = new JSONArray();
 
                 for (String vr : variants) {
                     variantsJSON.put(encryptMessage(vr, getPasswordChat(msg.chatId), msg.encryptId));
                 }
+
+                if(msg.data==null)msg.data=new JSONObject();
+                msg.data.put("variants",variantsJSON);
+            } catch (Exception e) {
+                Log.e(TAG,"Failed to prepare poll: ",e);
+                return CompletableFuture.completedFuture(null);
+            }
+        } else if(msg.type==4&&msg.data!=null) {
+            variantsJSON=msg.data.optJSONArray("variants");
+        }
+
+        if(variantsJSON!=null&&variantsJSON.length()>1&&variantsJSON.length()<13) {
+            try {
 
                 JSONObject postData = new JSONObject();
                 postData.put("message", msg.message);
@@ -2224,7 +2745,7 @@ public class HalChatGroupChats {
 
                 msg.type=4;
 
-                return hc.hcapi.apiReq("sendPoll", postData);
+                return sendMessageApiReq("sendPoll",postData);
             } catch (Exception e) {
                 Log.e(TAG,"Failed to send poll: ",e);
                 return CompletableFuture.completedFuture(null);
@@ -2239,6 +2760,11 @@ public class HalChatGroupChats {
             postData.put("chatId",msg.chatId);
             postData.put("commentMsg",msg.commentMsg);
             postData.put("soundMsg",-1);
+            if(msg.dataBot!=null&&!msg.dataBot.isEmpty()&&!"-1".equals(msg.dataBot)) {
+                JSONObject dataBot=new JSONObject(msg.dataBot);
+                JSONObject plugins=dataBot.optJSONObject("plugins");
+                if(plugins!=null)postData.put("plugins",plugins.toString());
+            }
             if(!msg.recordMic.equals("-1")) {
                 postData.put("recordMic",msg.recordMic);
             }
@@ -2249,7 +2775,7 @@ public class HalChatGroupChats {
 
             Log.e(TAG,"PostData: "+ postData);
 
-            return hc.hcapi.apiReq("sendMessage",postData);
+            return sendMessageApiReq("sendMessage",postData);
         } catch (Exception e) {
             Log.e(TAG, "Error in sendMessage", e);
         }
@@ -2257,14 +2783,49 @@ public class HalChatGroupChats {
     }
 
     protected void addToSendMessage(HCMessage msg) {
-        String encryptId = generateEncryptId(System.currentTimeMillis(), msg.chatId);
-        msg.encryptId = HalChatFunctionsLib.hexStringToByteArray(encryptId);
-        msg.message = encryptMessage(msg.decryptedMessage, getPasswordChat(msg.chatId), msg.encryptId);
+        prepareMessageForSend(msg);
+        String encryptId=HalChatFunctionsLib.bytesToHex(msg.encryptId);
+
+        Cursor existing=db.rawQuery("SELECT `uid` FROM `sendMessages` WHERE `encryptId`=? LIMIT 1",new String[]{encryptId});
+        boolean alreadyQueued=existing.moveToFirst();
+        existing.close();
+        if(alreadyQueued) {
+            checkSendMessages();
+            return;
+        }
+
+        JSONObject queueData;
+        try {
+            queueData=msg.data==null ? new JSONObject() : new JSONObject(msg.data.toString());
+            queueData.put(QUEUED_ATTACHMENTS_KEY,msg.attachments==null?new JSONArray():msg.attachments);
+        } catch(JSONException error) {
+            Log.e(TAG,"Unable to prepare queued message metadata",error);
+            queueData=new JSONObject();
+        }
 
         db.execSQL("INSERT INTO `sendMessages` (`chatId`, `fromId`, `answerMsg`, `commentMsg`, `message`, `soundMsg`, `dataBot`, `recordMic`, `encryptId`," +
                 "`type`, `data`, `shareId`, `pixelId`, `v`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",new String[]{String.valueOf(msg.chatId),String.valueOf(msg.fromId),
-        String.valueOf(msg.answerMsg),String.valueOf(msg.commentMsg),msg.message,String.valueOf(msg.soundMsg),msg.dataBot,msg.recordMic,HalChatFunctionsLib.bytesToHex(msg.encryptId),
-        String.valueOf(msg.type),msg.data==null?"NULL":msg.data.toString(),String.valueOf(msg.shareId),String.valueOf(msg.pixelId),String.valueOf(msg.v)});
+        String.valueOf(msg.answerMsg),String.valueOf(msg.commentMsg),msg.message,String.valueOf(msg.soundMsg),msg.dataBot,msg.recordMic,encryptId,
+        String.valueOf(msg.type),queueData.toString(),String.valueOf(msg.shareId),String.valueOf(msg.pixelId),String.valueOf(msg.v)});
+
+        checkSendMessages();
+    }
+
+    private void prepareMessageForSend(HCMessage msg) {
+        if(msg.isHalEnc)return;
+        String encryptId=generateEncryptId(System.currentTimeMillis(),msg.chatId);
+        msg.encryptId=HalChatFunctionsLib.hexStringToByteArray(encryptId);
+        msg.message=encryptMessage(msg.decryptedMessage,getPasswordChat(msg.chatId),msg.encryptId);
+        msg.isHalEnc=true;
+    }
+
+    private CompletableFuture<JSONObject> sendMessageApiReq(String request,JSONObject postData) {
+        HalChatWS webSocket=hc.chatWS;
+        if(webSocket!=null&&webSocket.isReady()) {
+            Log.d(TAG,"Sending "+request+" through the active WebSocket");
+            return webSocket.apiReq(request,postData);
+        }
+        return hc.hcapi.apiReq(request,postData);
     }
 
     protected CompletableFuture<JSONObject> sendPixel(Pixel pixel, long chatId, long commentMsg) {
@@ -2325,7 +2886,7 @@ public class HalChatGroupChats {
                             );
 
                             hc.hd.addLocalFile(data.getString("path"),data.getString("name"),hc.idUser,data.getLong("updated"),file,data.getString("id"),
-                                    data.getString("mimeType"),data.getString("fileType"),data.getString("imageData"));
+                                    data.getString("mimeType"),data.getString("fileType"),data.getString("mimeData"));
 
                             if (fileUploadEvent != null) {
                                 fileUploadEvent.onUpload(hcf, uidf);
@@ -2370,6 +2931,7 @@ public class HalChatGroupChats {
     }
 
     protected HCMessage deencryptMessage(HCMessage msg,String password) {
+        if(password==null)return msg;
         if(!msg.isHalEnc){
             return msg;}
         if(msg.message.isEmpty()){
@@ -2402,6 +2964,7 @@ public class HalChatGroupChats {
         }
         if(!msg.isDecrypted) {
             msg=decryptMessage(msg, password);
+            if(!msg.isDecrypted)return msg;
         }
         if(msg.type==4&&msg.data!=null&&msg.data.has("variants")&&msg.decryptedPollVariants==null) {
             decryptPollVariants(msg,password,true);

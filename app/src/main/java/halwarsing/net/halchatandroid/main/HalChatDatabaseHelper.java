@@ -9,7 +9,7 @@ import android.util.Log;
 //Инициализация sql баз данных, создание новых и обновление старых
 public class HalChatDatabaseHelper extends SQLiteOpenHelper {
     private static final String DATABASE_NAME = "halchat.db";
-    private static final int DATABASE_VERSION = 16;
+    private static final int DATABASE_VERSION = 19;
     private static final String TAG = "HCDBC";
     SQLiteDatabase db;
     String[] UIDNames=new String[]{"msg","chats","chatUsers","chatActions","actions"};
@@ -121,6 +121,16 @@ public class HalChatDatabaseHelper extends SQLiteOpenHelper {
 
             //Message reactions
             addMessageReactions(db);
+
+            //Mime Data Update
+            updateMimeData(db);
+
+            //HC Plugins Update
+            createStorageHCPlugins(db);
+
+            //HC AI Update
+            createCacheAI(db);
+            createHCPlugins(db);
 
             Log.d(TAG,"Database tables created");
         } catch (Exception e) {
@@ -319,6 +329,94 @@ public class HalChatDatabaseHelper extends SQLiteOpenHelper {
                 "ON groupChatsMessagesSelectedReaction(fromId, chatId, msgId);");
     }
 
+    private void updateMimeData(SQLiteDatabase rdb) {
+        rdb.execSQL("ALTER TABLE `files` RENAME COLUMN `imageData` TO `mimeData`;");
+    }
+
+    /* Хранилище для HalChatPlugins */
+    private void createStorageHCPlugins(SQLiteDatabase rdb) {
+        rdb.execSQL("CREATE TABLE IF NOT EXISTS `storagePlugins` "+
+                "(`uid` INTEGER primary key AUTOINCREMENT,"+
+                "`pluginId` INTEGER NOT NULL,"+
+                "`key` VARCHAR(120) NOT NULL,"+
+                "`value` TEXT NOT NULL"+
+                ")");
+        rdb.execSQL("CREATE INDEX IF NOT EXISTS idx_storagePlugins_plugin ON storagePlugins(`pluginId`,`key`)");
+    }
+
+    /* Кэш файлов ИИ для быстрого доступа к ним после скачивания и возможность обновления */
+    private void createCacheAI(SQLiteDatabase rdb) {
+        rdb.execSQL("CREATE TABLE IF NOT EXISTS `cacheAI` "+
+                "(`uid` INTEGER primary key AUTOINCREMENT,"+
+                "`aiModel` INTEGER NOT NULL,"+
+                "`version` INTEGER NOT NULL,"+
+                "`file` VARCHAR(100) NOT NULL)");
+        rdb.execSQL("CREATE INDEX IF NOT EXISTS idx_cacheAI ON cacheAI(`aiModel`,`file`)");
+    }
+
+    /* Плагины чата */
+    private void createHCPlugins(SQLiteDatabase rdb) {
+        //Список предзагруженных плагинов
+        rdb.execSQL("CREATE TABLE IF NOT EXISTS `plugins` "+
+                "(`uid` INTEGER primary key AUTOINCREMENT,"+
+                "`pluginId` INTEGER NOT NULL,"+
+                "`name` VARCHAR(64) NOT NULL," +
+                "`description` TEXT NOT NULL," +
+                "`icon` VARCHAR(100) NOT NULL," +
+                "`plugin` VARCHAR(100) NOT NULL," +
+                "`type` INTEGER NOT NULL," +
+                "`version` VARCHAR(10) NOT NULL," +
+                "`versionCode` INTEGER NOT NULL)"
+        );
+
+        //Плагины и данные внутри каждого чата
+        rdb.execSQL("CREATE TABLE IF NOT EXISTS `groupChatsPlugins` " +
+                "(`uid` INTEGER primary key AUTOINCREMENT," +
+                "`chatPluginId` INTEGER NOT NULL," +
+                "`chatId` INTEGER NOT NULL," +
+                "`pluginId` INTEGER NOT NULL," +
+                "`dataId` INTEGER NOT NULL," +
+                "`dataType` INTEGER NOT NULL)"
+        );
+
+        //ИИ модели
+        rdb.execSQL("CREATE TABLE IF NOT EXISTS `ai_models` " +
+                "(`uid` INTEGER primary key AUTOINCREMENT," +
+                "`modelId` INTEGER NOT NULL," +
+                "`files` TEXT NOT NULL," +
+                "`name` VARCHAR(100) NOT NULL," +
+                "`description` TEXT NOT NULL," +
+                "`countFiles` INTEGER NOT NULL," +
+                "`sizeFiles` INTEGER NOT NULL," +
+                "`quantanization` INTEGER NOT NULL," +
+                "`countParameters` REAL NOT NULL," +
+                "`isMobileSupport` INTEGER NOT NULL)");
+
+        //ИИ LoRA
+        rdb.execSQL("CREATE TABLE IF NOT EXISTS `ai_lora` " +
+                "(`uid` INTEGER primary key AUTOINCREMENT," +
+                "`loraId` INTEGER NOT NULL," +
+                "`name` VARCHAR(100) NOT NULL," +
+                "`description` TEXT NOT NULL," +
+                "`file` VARCHAR(100) NOT NULL," +
+                "`size` INTEGER NOT NULL," +
+                "`ai` INTEGER NOT NULL)");
+
+        //ИИ персонажи
+        rdb.execSQL("CREATE TABLE IF NOT EXISTS `ai_person` " +
+                "(`uid` INTEGER primary key AUTOINCREMENT," +
+                "`personId` INTEGER NOT NULL," +
+                "`name` VARCHAR(100) NOT NULL," +
+                "`description` TEXT NOT NULL," +
+                "`version` INTEGER NOT NULL," +
+                "`pluginId` INTEGER NOT NULL," +
+                "`ai_model` INTEGER NOT NULL," +
+                "`ai_loras` TEXT NOT NULL," +
+                "`deviceConfig` TEXT NOT NULL," +
+                "`aiConfig` TEXT NOT NULL," +
+                "`personConfig` TEXT NOT NULL)");
+    }
+
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         try {
@@ -361,6 +459,16 @@ public class HalChatDatabaseHelper extends SQLiteOpenHelper {
             }
             if(oldVersion<16) {
                 addSelectedPollVariant(db);
+            }
+            if(oldVersion<17) {
+                updateMimeData(db);
+            }
+            if(oldVersion<18) {
+                createStorageHCPlugins(db);
+            }
+            if(oldVersion<19) {
+                createCacheAI(db);
+                createHCPlugins(db);
             }
         } catch (Exception e) {
             Log.e(TAG,"Error upgrading",e);

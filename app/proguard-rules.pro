@@ -24,3 +24,23 @@
 -dontwarn org.openjsse.**
 -dontwarn org.bouncycastle.**
 -dontwarn org.conscrypt.**
+
+# JNI entry points and callbacks used by the embedded llama.cpp engine and HalSM.
+-keep class halwarsing.net.halchatandroid.localai.LLamaNative { *; }
+-keep interface halwarsing.net.halchatandroid.localai.LLamaNative$StreamCallback { *; }
+-keep class halwarsing.net.halchatandroid.halsm.HalSMNative { *; }
+-keep interface halwarsing.net.halchatandroid.halsm.HalSMNative$* { *; }
+-keep class halwarsing.net.halchatandroid.halsm.HalSMExecutable { *; }
+-keep class halwarsing.net.halchatandroid.halsm.HalSMExecutable$* { *; }
+-keep class halwarsing.net.halchatandroid.halsm.HalSMException { *; }
+
+# HalSM modules: HalSMExecutable.addModule() registers their static methods, nested classes and initializeVars() by name
+-keepattributes InnerClasses,EnclosingMethod
+-keep class halwarsing.net.halchatandroid.main.HalChatModule { *; }
+-keep class halwarsing.net.halchatandroid.main.HalChatModule$* { *; }
+-keep class halwarsing.net.halchatandroid.halsm.LocalLLMHalSM { *; }
+-keep class halwarsing.net.halchatandroid.halsm.LocalLLMHalSM$* { *; }
+
+-keepclassmembers class halwarsing.net.halchatandroid.plugins.PluginWebUi$Bridge {
+    @android.webkit.JavascriptInterface <methods>;
+}

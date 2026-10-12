@@ -108,6 +108,20 @@ public class HalChatUsers {
         return CompletableFuture.completedFuture(null);
     }
 
+    public long getOtherChatUserId(long chatId,long currentUserId) {
+        Cursor userCursor=db.rawQuery(
+                "SELECT `toId` FROM `groupChatsUsers` " +
+                        "WHERE `chatId`=? AND `toId`!=? AND `isJoin`=1 " +
+                        "ORDER BY `uid` DESC LIMIT 1",
+                new String[]{String.valueOf(chatId),String.valueOf(currentUserId)}
+        );
+        try {
+            return userCursor.moveToFirst()?userCursor.getLong(0):-1;
+        } finally {
+            userCursor.close();
+        }
+    }
+
     protected HCUser getChatUserFromJson(JSONObject user,long chatId,HNUser hnUser) throws JSONException {
         return new HCUser(
                 -1,

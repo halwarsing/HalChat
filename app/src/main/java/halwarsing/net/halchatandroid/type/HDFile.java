@@ -9,9 +9,9 @@ public class HDFile {
     public long fromId,updated;
     public boolean isFolder;
     public String mimeType,fileType;
-    public JSONObject imageData;
+    public JSONObject mimeData;
 
-    public HDFile(long uid,String id,String path,String name,long fromId,long updated,boolean isFolder,String mimeType,String fileType,String imageData) throws JSONException {
+    public HDFile(long uid,String id,String path,String name,long fromId,long updated,boolean isFolder,String mimeType,String fileType,String mimeData) throws JSONException {
         this.uid=uid;
         this.id=id;
         this.path=path;
@@ -21,6 +21,6 @@ public class HDFile {
         this.isFolder=isFolder;
         this.mimeType=mimeType;
         this.fileType=fileType;
-        this.imageData=imageData!=null&&imageData.startsWith("{")&&imageData.endsWith("}")?new JSONObject(imageData):null;
+        this.mimeData=mimeData!=null&&mimeData.startsWith("{")&&mimeData.endsWith("}")?new JSONObject(mimeData):null;
     }
 }

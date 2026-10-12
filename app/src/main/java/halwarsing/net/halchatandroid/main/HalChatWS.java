@@ -9,6 +9,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.KeyPair;
@@ -40,17 +41,18 @@ public class HalChatWS extends WebSocketListener {
     private HalChatWSI func;
     private String token;
     private static final String TAG="HCWS";
-    private WebSocket ws;
+    private volatile WebSocket ws;
     private HalChat hc;
     private Map<String, CompletableFuture<JSONObject>> pendingRequests = new ConcurrentHashMap<>();
-    protected boolean isAuth;
+    protected volatile boolean isAuth;
+    private volatile boolean manuallyClosed;
 
     public HalChatWS(HalChatWSI func,String token,HalChat hc) {
         this.func=func;
         this.token=token;
         this.hc=hc;
         this.isAuth=false;
-        hc.chatWS=this;
+        this.manuallyClosed=false;
     }
 
     private void sendAuth(WebSocket socket) {
@@ -76,14 +78,27 @@ public class HalChatWS extends WebSocketListener {
     }
 
     public void close() {
-        ws.close(1000,"Close connection");
+        manuallyClosed=true;
+        WebSocket currentSocket=ws;
+        if(currentSocket!=null)currentSocket.close(1000,"Close connection");
         this.isAuth=false;
         this.ws=null;
+        failPendingRequests(new IOException("WebSocket closed"));
+        if(hc.chatWS==this)hc.chatWS=null;
         hc.runEvent("onClose",new JSONObject());
+    }
+
+    protected boolean isReady() {
+        return isAuth&&ws!=null&&!manuallyClosed;
     }
 
     protected CompletableFuture<JSONObject> apiReq(String req,JSONObject postData) {
         CompletableFuture<JSONObject> future=new CompletableFuture<>();
+        WebSocket currentSocket=ws;
+        if(currentSocket==null||manuallyClosed) {
+            future.completeExceptionally(new IOException("WebSocket is not connected"));
+            return future;
+        }
         // 1. Генерируем requestId
         String requestId = generateRequestId();
 
@@ -99,7 +114,11 @@ public class HalChatWS extends WebSocketListener {
             payload.put("data", postData);
 
             // 4. Отправляем через WebSocket
-            ws.send(payload.toString());
+            if(!currentSocket.send(payload.toString())) {
+                pendingRequests.remove(requestId);
+                future.completeExceptionally(new IOException("WebSocket rejected outgoing request"));
+                return future;
+            }
 
             Log.e(TAG,"Req: "+req+";"+requestId);
         } catch (Exception e) {
@@ -114,6 +133,7 @@ public class HalChatWS extends WebSocketListener {
     public void onOpen(@NonNull WebSocket webSocket, @NonNull Response response) {
         Log.d(TAG, "Соединение установлено");
         this.ws=webSocket;
+        this.manuallyClosed=false;
         sendAuth(webSocket);
 
         apiReq("getListChats",new JSONObject()).thenAccept(res->{
@@ -143,6 +163,7 @@ public class HalChatWS extends WebSocketListener {
         if(text.equals("pong")){
             if(!isAuth) {
                 isAuth=true;
+                hc.chatWS=this;
                 TaskExecutorManager.getInstance().submitRealtime("ws-auth", () -> {
                     hc.runEvent("onAuth",new JSONObject());
                     return null;
@@ -211,6 +232,25 @@ public class HalChatWS extends WebSocketListener {
     public void onFailure(@NonNull WebSocket webSocket, @NonNull Throwable t, Response response) {
         Log.e(TAG, "Ошибка соединения", t);
         isAuth=false;
-        func.reconnectWebSocket();
+        if(ws==webSocket)ws=null;
+        if(hc.chatWS==this)hc.chatWS=null;
+        failPendingRequests(t);
+        if(!manuallyClosed)func.reconnectWebSocket();
+    }
+
+    @Override
+    public void onClosed(@NonNull WebSocket webSocket,int code,@NonNull String reason) {
+        isAuth=false;
+        if(ws==webSocket)ws=null;
+        if(hc.chatWS==this)hc.chatWS=null;
+        failPendingRequests(new IOException("WebSocket closed: "+code+" "+reason));
+        if(!manuallyClosed)func.reconnectWebSocket();
+    }
+
+    private void failPendingRequests(Throwable error) {
+        for(Map.Entry<String,CompletableFuture<JSONObject>> entry:pendingRequests.entrySet()) {
+            CompletableFuture<JSONObject> future=pendingRequests.remove(entry.getKey());
+            if(future!=null)future.completeExceptionally(error);
+        }
     }
 }

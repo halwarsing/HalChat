@@ -10,7 +10,7 @@
     tools:context=".main.AddChatActivity">
     <include
         android:id="@+id/toolbar"
-        layout="@layout/main_toolbar_layout"/>
+        layout="@layout/back_toolbar_layout"/>
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"

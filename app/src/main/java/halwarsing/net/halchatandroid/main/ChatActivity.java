@@ -6,13 +6,14 @@ import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.database.Cursor;
 import android.graphics.BitmapFactory;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Rect;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.media.AudioManager;
+import android.media.MediaPlayer;
 import android.media.MediaRecorder;
 import android.net.Uri;
 import android.os.Bundle;
@@ -29,9 +30,11 @@ import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.GridView;
 import android.widget.ImageButton;
 import android.widget.ImageView;
@@ -47,7 +50,9 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.content.res.AppCompatResources;
+import androidx.appcompat.widget.Toolbar;
 import androidx.core.app.ActivityCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
@@ -70,26 +75,40 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 import halwarsing.net.halchatandroid.R;
+import halwarsing.net.halchatandroid.type.AILoRA;
+import halwarsing.net.halchatandroid.type.AIModel;
+import halwarsing.net.halchatandroid.type.ChatPlugin;
 import halwarsing.net.halchatandroid.type.Emoji;
 import halwarsing.net.halchatandroid.type.HCAction;
 import halwarsing.net.halchatandroid.type.HCChat;
 import halwarsing.net.halchatandroid.type.HCFile;
 import halwarsing.net.halchatandroid.type.HCMessage;
+import halwarsing.net.halchatandroid.type.HCUser;
+import halwarsing.net.halchatandroid.type.HNUser;
 import halwarsing.net.halchatandroid.type.HalChatI;
 import halwarsing.net.halchatandroid.type.MessageReaction;
+import halwarsing.net.halchatandroid.type.PersonAI;
 import halwarsing.net.halchatandroid.type.Pixel;
+import halwarsing.net.halchatandroid.views.AILoading;
 
 //Страница чата
 public class ChatActivity extends AppCompatActivity {
@@ -193,6 +212,28 @@ public class ChatActivity extends AppCompatActivity {
     private boolean isMessageSearchIndexBuilding=false;
     private boolean isMessageSearchIndexReady=false;
     private int currentMessageSearchResult=-1;
+    private final AtomicLong nextPendingMessageId=new AtomicLong(-1);
+    private HalChatI chatInterfaceCallback;
+
+    //Private chat user status
+    private static final long USER_STATUS_REFRESH_INTERVAL_MS=15_000L;
+    private static final long USER_ONLINE_THRESHOLD_MS=180_000L;
+    private static final long USER_RECENTLY_ONLINE_THRESHOLD_MS=600_000L;
+    private final Handler userStatusHandler=new Handler(Looper.getMainLooper());
+    private final Runnable userStatusUpdateRunnable=this::updatePrivateChatUserStatus;
+    private TextView userStatusText;
+    private volatile long privateChatUserId=-1;
+    private volatile boolean userStatusUpdatesActive=false;
+
+    //HCPlugins
+    private HalChatPlugins plugins=null;
+    private boolean isPluginDisabled=false;
+    private String pluginDisabledIcon=null;
+    private String pluginSoundMsg=null;
+    private volatile String messageInputText="";
+    private View ai_loading_view=null;
+    private FrameLayout mainFrame=null;
+    private AILoading aiLoading=null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -221,12 +262,15 @@ public class ChatActivity extends AppCompatActivity {
             return insets;
         });
 
+        Toolbar toolbar=findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
+
+        Objects.requireNonNull(getSupportActionBar()).setDisplayShowTitleEnabled(false);
+
         HalChatApp app=(HalChatApp)getApplicationContext();
         hc=app.getHalChat();
         chatId=getIntent().getLongExtra("uid",-1);
         commentId=getIntent().getLongExtra("commentId",-1);
-
-        Log.e(TAG,"CommentID: "+commentId);
 
         hc.chatGroupChats.setSendMessageEvent(msg -> Log.e(TAG,"Test: "+msg.msgId));
 
@@ -235,6 +279,7 @@ public class ChatActivity extends AppCompatActivity {
         //Variables
         chat=hc.chatGroupChats.getChatInfo(chatId);
         nameChatText=findViewById(R.id.toolbar_chat_name);
+        userStatusText=findViewById(R.id.toolbar_user_status);
         iconChatView=findViewById(R.id.toolbar_chat_icon);
         buttonBack=findViewById(R.id.toolbar_back);
         buttonMenu=findViewById(R.id.toolbar_menu);
@@ -250,6 +295,7 @@ public class ChatActivity extends AppCompatActivity {
         deleteButton = findViewById(R.id.delete_button);
         sendRecordButton = findViewById(R.id.send_record_button);
         messageInputDiv=findViewById(R.id.message_input_div);
+        mainFrame=findViewById(R.id.mainFrame);
 
         //Answer / Edit Message
         answerDiv=findViewById(R.id.answerDiv);
@@ -302,13 +348,18 @@ public class ChatActivity extends AppCompatActivity {
         messagesRecyclerView.setLayoutManager(layoutManager);
         messagesRecyclerView.setAdapter(messageAdapter);
 
+        //HCPlugins
+        if(commentId==-1)initPlugins();
+
         //ChatInterface
-        hc.setChatInterface(new HalChatI() {
+        chatInterfaceCallback=new HalChatI() {
 
             @Override
             public boolean onNewMessage(HCMessage data) {
                 if(data.chatId==chatId) {
-                    runOnUiThread(() -> ChatActivity.this.onNewMessage(data));
+                    runOnUiThread(() -> {
+                        if(!isFinishing()&&!isDestroyed())ChatActivity.this.onNewMessage(data);
+                    });
                     return true;
                 }
                 return false;
@@ -328,9 +379,28 @@ public class ChatActivity extends AppCompatActivity {
 
             @Override
             public void onEditMessage(HCMessage message) {
-                ChatActivity.this.updateMessage(message);
+                if(message.chatId==chatId) {
+                    ChatActivity.this.updateMessage(message);
+                }
             }
-        });
+
+            @Override
+            public void onReadMessage(long actionChatId,long msgId) {
+                if(actionChatId==chatId) {
+                    runOnUiThread(()->{
+                        if(!isFinishing()&&!isDestroyed())messageAdapter.readMessage(msgId);
+                    });
+                }
+            }
+
+            @Override
+            public void onPasswordAvailable(long passwordChatId) {
+                if(passwordChatId==chatId) {
+                    runOnUiThread(ChatActivity.this::decryptLoadedMessagesAfterPassword);
+                }
+            }
+        };
+        hc.setChatInterface(chatInterfaceCallback);
 
         //Pinned messages
         pinnedMsgDiv.setVisibility(View.GONE);
@@ -338,6 +408,7 @@ public class ChatActivity extends AppCompatActivity {
 
         //Set name and icon chat
         nameChatText.setText(chat.name);
+        setupPrivateChatUserStatus();
         hc.hd.getFileById(chat.icon).thenAccept(file -> {
             iconChatView.setImageBitmap(BitmapFactory.decodeFile(file.getAbsolutePath()));
         });
@@ -429,10 +500,11 @@ public class ChatActivity extends AppCompatActivity {
 
             @Override
             public void onTextChanged(CharSequence s, int start, int before, int count) {
+                messageInputText=getInputText();
                 if (s.toString().trim().isEmpty()) {
-                    sendButton.setImageResource(R.drawable.ic_microphone);
+                    setSendIcon(R.drawable.ic_microphone);
                 } else if(selectedFiles.isEmpty()) {
-                    sendButton.setImageResource(R.drawable.ic_send);
+                    setSendIcon(R.drawable.ic_send);
                 }
             }
 
@@ -532,6 +604,24 @@ public class ChatActivity extends AppCompatActivity {
 
         pollRemoveBtn.setOnClickListener(this::removePollMenu);
         pollAddBtn.setOnClickListener(this::addPollMenu);
+    }
+
+    private void decryptLoadedMessagesAfterPassword() {
+        if(messageAdapter==null||isFinishing()||isDestroyed())return;
+        List<HCMessage> loadedMessages=new ArrayList<>(messageAdapter.messageList);
+        HistoryAnchor anchor=captureHistoryAnchor();
+        TaskExecutorManager.getInstance().submitDecryptChatActivity(
+                "password:chatId:"+chatId,
+                ()->{
+                    List<HCMessage> decryptedMessages=hc.chatGroupChats.decryptMessages(chatId,loadedMessages);
+                    runOnUiThread(()->{
+                        if(isFinishing()||isDestroyed())return;
+                        messageAdapter.clearMessages(decryptedMessages);
+                        restoreHistoryAnchor(anchor);
+                    });
+                    return null;
+                }
+        );
     }
 
     private void setupMessageSearch(ImageButton buttonSearch) {
@@ -1050,6 +1140,345 @@ public class ChatActivity extends AppCompatActivity {
         return result.toString();
     }
 
+    //HCPlugins
+    private void initPlugins() {
+        boolean isStartChat=!hc.chatGroupChats.hasMessagesChat(chatId);
+
+        Log.e(TAG,"IS START CHAT: "+isStartChat);
+        plugins=HalChatPlugins.open(chatId, new HalChatPlugins.HalChatPluginsInterface() {
+            @Override
+            public void showMessage(String text) {
+                runOnUiThread(()->{
+                    if(isFinishing()||isDestroyed())return;
+                    new AlertDialog.Builder(ChatActivity.this)
+                            .setMessage(text)
+                            .setPositiveButton(R.string.hdw_yes,null)
+                            .show();
+                });
+            }
+
+            @Override
+            public void setPluginDisabledIcon(String iconUrl) {
+                runOnUiThread(()->{
+                    pluginDisabledIcon=iconUrl;
+                    if(isPluginDisabled)updateSendIcon();
+                });
+            }
+
+            @Override
+            public void disableUserSend() {
+                runOnUiThread(()->{
+                    isPluginDisabled=true;
+                    updateSendIcon();
+                });
+            }
+
+            @Override
+            public void enableUserSend() {
+                runOnUiThread(()->{
+                    isPluginDisabled=false;
+                    updateSendIcon();
+                });
+            }
+
+            @Override
+            public void setMessageInput(String text) {
+                runOnUiThread(()->ChatActivity.this.setMessageInput(text));
+            }
+
+            @Override
+            public String getMessageInput() {
+                return messageInputText;
+            }
+
+            @Override
+            public void sendMessagePlugin(String text, List<String> attachments, String pluginData, String soundMsg) {
+                runOnUiThread(()->ChatActivity.this.sendMessagePlugin(text,attachments,pluginData,soundMsg));
+            }
+
+            @Override
+            public void editMessagePlugin(long msgId, String text) {
+                ChatActivity.this.editMessagePlugin(msgId,text);
+            }
+
+            @Override
+            public void editLocalMessagePlugin(long msgId, String text) {
+                runOnUiThread(()->{
+                    HCMessage message=messageAdapter.getMessageById(msgId);
+                    if(message==null)return;
+                    message.setDecryptedMessage(text);
+                    messageAdapter.editMessage(message);
+                });
+            }
+
+            @Override
+            public void onGenerateDone() {
+                runOnUiThread(()->{
+                    if(!isFinishing()&&!isDestroyed())playPluginSound();
+                });
+            }
+
+            @Override
+            public void stopLoadScreen() {
+                runOnUiThread(()->{
+                    if(aiLoading!=null) {
+                        aiLoading.stop();
+                    }
+                });
+            }
+
+            @Override
+            public void createLoadScreen(JSONObject options) {
+                runOnUiThread(()->{
+                    if(aiLoading!=null) {
+                        aiLoading.create(options);
+                    }
+                });
+            }
+
+            @Override
+            public void updateLoadScreen(JSONObject progress) {
+                runOnUiThread(()->{
+                    if(aiLoading!=null) {
+                        aiLoading.update(progress);
+                    }
+                });
+            }
+        },getApplicationContext(),chat.description,isStartChat);
+
+        hc.chatGroupChats.getPluginsChat(chatId).thenAccept(pluginsList->{
+            boolean isLoadAI=false;
+            for(ChatPlugin chatPlugin:pluginsList) {
+                if(chatPlugin.dataType==1)isLoadAI=true;
+            }
+
+            if(isLoadAI) {
+                runOnUiThread(()->{
+                    ai_loading_view=getLayoutInflater().inflate(
+                            R.layout.ai_loading_view,
+                            mainFrame,
+                            false
+                    );
+
+                    ai_loading_view.setClickable(true);
+
+                    mainFrame.addView(ai_loading_view,new FrameLayout.LayoutParams(
+                            FrameLayout.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                    ));
+
+                    aiLoading=new AILoading(ai_loading_view);
+                });
+            }
+
+            List<CompletableFuture<Void>> loads=new ArrayList<>();
+
+            for(int i=0;i<pluginsList.size();i++) {
+                ChatPlugin chatPlugin=pluginsList.get(i);
+                switch (chatPlugin.dataType) {
+                    case 1:
+                        try {
+                            JSONObject dataPlugin = new JSONObject();
+
+                            PersonAI personAI = (PersonAI) chatPlugin.data;
+                            dataPlugin.put("uid", personAI.personId);
+                            dataPlugin.put("name",personAI.name);
+                            dataPlugin.put("description",personAI.description);
+                            dataPlugin.put("version",personAI.version);
+                            dataPlugin.put("ai_model",personAI.ai_model);
+                            dataPlugin.put("ai_loras",personAI.ai_loras);
+                            dataPlugin.put("deviceConfig",personAI.deviceConfig);
+                            dataPlugin.put("aiConfig",personAI.aiConfig);
+                            dataPlugin.put("personConfig",personAI.personConfig);
+
+                            AIModel aiModel=hc.chatGroupChats.getAIModel(personAI.ai_model);
+                            if(aiModel==null) {
+                                dataPlugin.put("ai_model_files",new ArrayList[]{});
+                            } else {
+                                dataPlugin.put("ai_model_files", aiModel.files);
+                            }
+
+                            JSONArray loras_files=new JSONArray();
+
+                            for(int j=0;j<personAI.ai_loras.length();j++) {
+                                JSONArray ai_lora=personAI.ai_loras.getJSONArray(j);
+                                AILoRA loRA=hc.chatGroupChats.getAILoRA(ai_lora.getLong(0));
+                                if(loRA==null)continue;
+                                loras_files.put(loRA.file);
+                            }
+
+                            dataPlugin.put("ai_loras_files",loras_files);
+
+                            loads.add(HalChatPlugins.loadPlugin(chatPlugin, dataPlugin));
+                        } catch (JSONException e) {
+                            Log.e(TAG,"JSON Error in plugins chat: ",e);
+                        }
+                        break;
+                    default:
+                        loads.add(HalChatPlugins.loadPlugin(chatPlugin));
+                        break;
+                }
+            }
+
+            CompletableFuture.allOf(loads.toArray(new CompletableFuture[0])).thenRun(()->
+                    HalChatPlugins.runEvent("onStart",new ArrayList<>(),new HashMap<>())
+            );
+        });
+    }
+
+    private void setSendIcon(int res) {
+        if(isPluginDisabled)return;
+        sendButton.setImageResource(res);
+    }
+
+    private void updateSendIcon() {
+        if(isPluginDisabled) {
+            if(pluginDisabledIcon==null) {
+                sendButton.setImageResource(R.drawable.ic_stop);
+            } else {
+                Glide.with(this).load(pluginDisabledIcon).placeholder(R.drawable.ic_stop).into(sendButton);
+            }
+            return;
+        }
+
+        Glide.with(this).clear(sendButton);
+        boolean isSend=!messageInput.getText().toString().trim().isEmpty()||(!selectedFiles.isEmpty()&&countUploadFiles==0);
+        sendButton.setImageResource(isSend?R.drawable.ic_send:R.drawable.ic_microphone);
+    }
+
+    private static List<String> attachmentsToList(JSONArray attachments) {
+        List<String> out=new ArrayList<>();
+        if(attachments==null)return out;
+        for(int i=0;i<attachments.length();i++) {
+            out.add(attachments.optString(i,""));
+        }
+        return out;
+    }
+
+    private void sendMessagePlugin(String text, List<String> attachments, String pluginData, String soundMsg) {
+        if(isFinishing()||isDestroyed())return;
+        long t=System.currentTimeMillis();
+
+        String dataBot="";
+        if(pluginData!=null&&!pluginData.equals("-1")) {
+            try {
+                dataBot=new JSONObject().put("plugins",new JSONObject(pluginData)).toString();
+            } catch (JSONException e) {
+                Log.e(TAG,"Error pluginData in sendMessagePlugin: ",e);
+            }
+        }
+
+        HCMessage message=new HCMessage(-1,nextPendingMessageId.getAndDecrement(),chatId,hc.idUser,t/1000L,-1,commentId,text,new JSONArray(attachments==null?new ArrayList<>():attachments),"-1",dataBot,"-1",new byte[0],false,false,false,0,true,false,null,0,0,false,1);
+        message.setDecryptedMessage(text);
+
+        long pendingMessageId=message.msgId;
+        messageAdapter.addMessageLoaded(message);
+        messagesRecyclerView.scrollToPosition(messageAdapter.getItemCount()-1);
+
+        if(soundMsg!=null&&soundMsg.length()==100)pluginSoundMsg=soundMsg;
+
+        hc.chatGroupChats.sendMessage(message,new ArrayList<>()).thenAccept(res->{
+            if(res==null)return;
+            try {
+                if(res.getInt("errorCode")==0) {
+                    HCMessage nmsg=hc.chatGroupChats.jsonMsgToHCMSG(res.getJSONObject("message"));
+                    nmsg=hc.chatGroupChats.deencryptMessage(nmsg,hc.chatGroupChats.getPasswordChat(nmsg.chatId));
+                    hc.chatGroupChats.addMessageToChat(nmsg,true);
+                    HCMessage finalNmsg=nmsg;
+
+                    runOnUiThread(()->{
+                        if(isFinishing()||isDestroyed())return;
+                        messageAdapter.replacePendingMessage(pendingMessageId,finalNmsg);
+                        messagesRecyclerView.scrollToPosition(messageAdapter.getItemCount()-1);
+                    });
+
+                    HalChatPlugins.runEvent("onLocalBotSendedMessage",Collections.singletonList(nmsg.msgId),new HashMap<>());
+                } else {
+                    Log.e(TAG,"Error to sendMessagePlugin: "+res);
+                    runOnUiThread(()->messageAdapter.deleteMessage(pendingMessageId));
+                }
+            } catch (Exception e) {
+                Log.e(TAG,"sendMessagePlugin",e);
+            }
+        });
+    }
+
+    private void playPluginSound() {
+        if(pluginSoundMsg==null) {
+            hc.playSound("resources/audio/receive_message.wav");
+            return;
+        }
+
+        hc.hd.getFileById(pluginSoundMsg).thenAccept(file->{
+            MediaPlayer player=MediaPlayer.create(this,Uri.fromFile(file));
+            if(player==null)return;
+            player.setOnCompletionListener(MediaPlayer::release);
+            player.start();
+        });
+    }
+
+    private void editMessagePlugin(long msgId, String text) {
+        HCMessage message=hc.chatGroupChats.getMessageById(chatId,msgId);
+        if(message==null)return;
+
+        message=hc.chatGroupChats.decryptMessage(message,hc.chatGroupChats.getPasswordChat(chatId));
+        message.setDecryptedMessage(text);
+        HCMessage finalMessage=message;
+
+        hc.chatGroupChats.sendEditMessage(message).thenAccept(res->{
+            if(!res)return;
+            runOnUiThread(()->{
+                if(isFinishing()||isDestroyed())return;
+                HCMessage old=messageAdapter.getMessageById(msgId);
+                if(old!=null)finalMessage.setFromIcon(old.icon);
+                messageAdapter.editMessage(finalMessage);
+            });
+        });
+    }
+
+    private void runUserSendMessageEvent(HCMessage message, String text) {
+        if(plugins==null)return;
+        hc.hnUsers.getUserByUserId(message.fromId).thenAccept(fromUser->
+                HalChatPlugins.runEvent("onUserSendMessage",Arrays.asList(message.msgId,message.type,message.time,text,
+                        fromUser==null?"":fromUser.nickname,message.fromId,fromUser==null?"":fromUser.icon,chatId,attachmentsToList(message.attachments)),new HashMap<>())
+        );
+    }
+
+    private void runUserAddMessageEvent(HCMessage message) {
+        if(plugins==null||message.type==2||message.type==3)return;
+
+        JSONObject pluginData=message.getPlugins();
+        Map<String,Object> pluginTag=new HashMap<>();
+        for(Iterator<String> it=pluginData.keys();it.hasNext();) {
+            String key=it.next();
+            pluginTag.put(key,pluginData.opt(key));
+        }
+
+        HCMessage answer=message.answerMsg==-1?null:hc.chatGroupChats.getMessageById(chatId,message.answerMsg);
+        CompletableFuture<HNUser> answerUserFuture=answer==null?CompletableFuture.completedFuture(null):hc.hnUsers.getUserByUserId(answer.fromId);
+
+        hc.hnUsers.getUserByUserId(message.fromId).thenCombine(answerUserFuture,(fromUser,answerUser)->{
+            String nickname=fromUser==null?"":fromUser.nickname;
+            String icon=fromUser==null?"":fromUser.icon;
+
+            JSONObject localBot=pluginData.optJSONObject("LocalBotMsg");
+            if(localBot!=null) {
+                nickname=localBot.optString("nickname",nickname);
+                icon=localBot.optString("icon",icon);
+            }
+
+            Object answerMsgNickname=false,answerMsgText=false;
+            if(answer!=null) {
+                answerMsgNickname=answerUser==null?"":answerUser.nickname;
+                answerMsgText=hc.chatGroupChats.decryptMessage(answer,hc.chatGroupChats.getPasswordChat(chatId)).decryptedMessage;
+            }
+
+            HalChatPlugins.runEvent("onUserAddMessage",Arrays.asList(message.msgId,message.type,message.time,message.decryptedMessage,nickname,message.fromId,icon,chatId,
+                    attachmentsToList(message.attachments),message.answerMsg==-1?false:message.answerMsg,answerMsgNickname,answerMsgText),pluginTag);
+            return null;
+        });
+    }
+
     private void sendMessageS(String recordMic) {
         long t=System.currentTimeMillis();
         long amsg=-1;
@@ -1058,7 +1487,7 @@ public class ChatActivity extends AppCompatActivity {
             amsg=answerMsg.msgId;
         }
 
-        HCMessage message=new HCMessage(-1,-1,chatId,hc.idUser,t/1000L,amsg,commentId,getInputText() ,new JSONArray(),"-1","-1",recordMic,new byte[0],false,false,false,0,true,false,null,0,0,false,1);
+        HCMessage message=new HCMessage(-1,nextPendingMessageId.getAndDecrement(),chatId,hc.idUser,t/1000L,amsg,commentId,getInputText() ,new JSONArray(),"-1","-1",recordMic,new byte[0],false,false,false,0,true,false,null,0,0,false,1);
 
         JSONArray attachments=new JSONArray();
 
@@ -1086,8 +1515,6 @@ public class ChatActivity extends AppCompatActivity {
                             messageAdapter.editMessage(message);
                         });
                     });
-                } else {
-
                 }
             });
             answerType=0;
@@ -1120,6 +1547,11 @@ public class ChatActivity extends AppCompatActivity {
             togglePollMenu();
         }
 
+        long pendingMessageId=message.msgId;
+        String text=message.decryptedMessage;
+        messageAdapter.addMessageLoaded(message);
+        messagesRecyclerView.scrollToPosition(messageAdapter.getItemCount()-1);
+
         hc.chatGroupChats.sendMessage(message,variants).thenAccept(res->{
             if(res==null){
                 return;
@@ -1142,10 +1574,11 @@ public class ChatActivity extends AppCompatActivity {
                     }
 
                     runOnUiThread(() -> {
-                        messageAdapter.addMessageLoaded(finalNmsg);
-                        //messageAdapter.addNewMessage(message);
-                        messagesRecyclerView.scrollToPosition(messageAdapter.messageList.size()-1);
+                        if(isFinishing()||isDestroyed())return;
+                        messageAdapter.replacePendingMessage(pendingMessageId,finalNmsg);
+                        messagesRecyclerView.scrollToPosition(messageAdapter.getItemCount()-1);
                     });
+                    runUserSendMessageEvent(finalNmsg,text);
                     //addMessage.addMessage(msg);
                 } else {
                     Log.e(TAG,"Error to sendMessage: "+ res);
@@ -1168,6 +1601,11 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     private void sendMessage(View v) {
+        if(isPluginDisabled) {
+            HalChatPlugins.runEvent("onClickBtnPluginDisabled",new ArrayList<>(),new HashMap<>());
+            return;
+        }
+
         emojiMenu.animate()
                 .translationY(emojiMenu.getHeight())
                 .alpha(0f)
@@ -1249,7 +1687,7 @@ public class ChatActivity extends AppCompatActivity {
         countUploadFiles--;
 
         if(countUploadFiles==0) {
-            sendButton.setImageResource(R.drawable.ic_send);
+            setSendIcon(R.drawable.ic_send);
         }
 
         View fileView=LayoutInflater.from(this).inflate(R.layout.file_item,attachmentsSend,false);
@@ -1266,17 +1704,17 @@ public class ChatActivity extends AppCompatActivity {
     private void setMessageInput(String text) {
         if(text.isEmpty()) {
             messageInput.setText("");
-            sendButton.setImageResource(R.drawable.ic_microphone);
+            setSendIcon(R.drawable.ic_microphone);
             return;
         }
         messageInput.setText(text);
-        sendButton.setImageResource(R.drawable.ic_send);
+        setSendIcon(R.drawable.ic_send);
     }
 
     protected int addTempFile(HCFile file) {
         selectedFiles.add(file);
 
-        sendButton.setImageResource(R.drawable.ic_microphone);
+        setSendIcon(R.drawable.ic_microphone);
 
         countUploadFiles++;
         View fileView=LayoutInflater.from(this).inflate(R.layout.upload_file_item,attachmentsSend,false);
@@ -1299,7 +1737,7 @@ public class ChatActivity extends AppCompatActivity {
         }
 
         if(countUploadFiles==0) {
-            sendButton.setImageResource(R.drawable.ic_send);
+            setSendIcon(R.drawable.ic_send);
         }
     }
 
@@ -1650,6 +2088,7 @@ public class ChatActivity extends AppCompatActivity {
                     JSONObject msg=res.getJSONObject("message");
                     message.msgId = msg.getLong("uid");
                     message.time = msg.getLong("time");
+                    message.isSended=true;
                     hc.chatGroupChats.addMessageToChat(message,true);
                     runOnUiThread(() -> {
                         messageAdapter.addMessageLoaded(message);
@@ -1749,13 +2188,18 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     public void onNewMessage(HCMessage message) {
+        if(isFinishing()||isDestroyed())return;
+        if(message.fromId!=hc.idUser) {
+            hc.chatGroupChats.readMessage(message.chatId,message.msgId);
+        }
         LinearLayoutManager layoutManager = (LinearLayoutManager) messagesRecyclerView.getLayoutManager();
         boolean isAtBottom = layoutManager == null||layoutManager.findLastVisibleItemPosition() > messageAdapter.getItemCount()-12;
 
         hc.hnUsers.getUserByUserId(message.fromId).thenAccept(hnUser -> {
                 runOnUiThread(()->{
+                    if(isFinishing()||isDestroyed())return;
                     message.setFromIcon(hnUser.icon);
-                    messageAdapter.addMessageLoaded(message);
+                    messageAdapter.addDeliveredMessage(message);
                     cacheMessageForSearch(message);
                     if (isAtBottom) {
                         messagesRecyclerView.scrollToPosition(messageAdapter.getItemCount()-1);
@@ -1772,6 +2216,8 @@ public class ChatActivity extends AppCompatActivity {
                 });
             }
         );
+
+        runUserAddMessageEvent(message);
     }
 
     public void onLoadMessage(HCMessage message) {
@@ -1779,7 +2225,8 @@ public class ChatActivity extends AppCompatActivity {
             hc.hnUsers.getUserByUserId(message.fromId,true).thenAccept(hnUser->{
                 message.setFromIcon(hnUser.icon);
                 runOnUiThread(()->{
-                    messageAdapter.addMessageLoaded(message);
+                    if(isFinishing()||isDestroyed())return;
+                    messageAdapter.addDeliveredMessage(message);
                     cacheMessageForSearch(message);
                     if(message.isPinned) {
                         loadPinnedMessages();
@@ -1790,6 +2237,7 @@ public class ChatActivity extends AppCompatActivity {
             Log.e(TAG,"onLoadMessage",e);
         }
 
+        runUserAddMessageEvent(message);
     }
 
     //Record Audio
@@ -1899,18 +2347,167 @@ public class ChatActivity extends AppCompatActivity {
         }
     }
 
+    private void setupPrivateChatUserStatus() {
+        if(isPrivateChat()) {
+            userStatusText.setText(R.string.user_status_loading);
+            userStatusText.setVisibility(View.VISIBLE);
+        } else {
+            userStatusText.setVisibility(View.GONE);
+        }
+    }
+
+    private boolean isPrivateChat() {
+        return chat!=null&&(chat.chatType==1||chat.chatType==3);
+    }
+
+    private void updatePrivateChatUserStatus() {
+        if(!userStatusUpdatesActive||!isPrivateChat())return;
+
+        if(privateChatUserId<=0) {
+            resolvePrivateChatUserAndUpdate();
+            return;
+        }
+
+        try {
+            JSONObject params=new JSONObject();
+            params.put("userId",privateChatUserId);
+            hc.hnapi.apiReq("getLastOnline",params).whenComplete((data,error)->{
+                if(error!=null) {
+                    Log.e(TAG,"Unable to update private chat user status",error);
+                } else if(data!=null&&data.optInt("errorCode",-1)==0) {
+                    long lastOnline=data.optLong("lastOnline",-1);
+                    if(lastOnline>=0) {
+                        runOnUiThread(()->{
+                            if(userStatusUpdatesActive&&!isFinishing()&&!isDestroyed()) {
+                                userStatusText.setText(formatPrivateChatUserStatus(lastOnline));
+                            }
+                        });
+                    }
+                }
+                scheduleNextUserStatusUpdate();
+            });
+        } catch(JSONException error) {
+            Log.e(TAG,"Unable to prepare private chat user status request",error);
+            scheduleNextUserStatusUpdate();
+        }
+    }
+
+    private void resolvePrivateChatUserAndUpdate() {
+        long cachedUserId=hc.chatUsers.getOtherChatUserId(chatId,hc.idUser);
+        if(cachedUserId>0) {
+            privateChatUserId=cachedUserId;
+            userStatusHandler.post(userStatusUpdateRunnable);
+            return;
+        }
+
+        hc.chatUsers.getChatUsers(chatId).whenComplete((users,error)->{
+            long resolvedUserId=-1;
+            if(error!=null) {
+                Log.e(TAG,"Unable to resolve private chat user",error);
+            } else if(users!=null) {
+                for(HCUser user:users) {
+                    if(user.toId!=hc.idUser) {
+                        resolvedUserId=user.toId;
+                        break;
+                    }
+                }
+            }
+
+            long result=resolvedUserId;
+            userStatusHandler.post(()->{
+                if(!userStatusUpdatesActive)return;
+                if(result>0) {
+                    privateChatUserId=result;
+                    updatePrivateChatUserStatus();
+                } else {
+                    scheduleNextUserStatusUpdate();
+                }
+            });
+        });
+    }
+
+    private void scheduleNextUserStatusUpdate() {
+        userStatusHandler.removeCallbacks(userStatusUpdateRunnable);
+        if(userStatusUpdatesActive) {
+            userStatusHandler.postDelayed(userStatusUpdateRunnable,USER_STATUS_REFRESH_INTERVAL_MS);
+        }
+    }
+
+    private String formatPrivateChatUserStatus(long lastOnlineSeconds) {
+        long elapsed=Math.max(0,System.currentTimeMillis()-lastOnlineSeconds*1000L);
+        if(elapsed<USER_ONLINE_THRESHOLD_MS) {
+            return getString(R.string.user_status_online);
+        }
+        if(elapsed<=USER_RECENTLY_ONLINE_THRESHOLD_MS) {
+            return getString(R.string.user_status_recently);
+        }
+
+        long value;
+        int formsResource;
+        if(elapsed<3_600_000L) {
+            value=elapsed/60_000L;
+            formsResource=R.array.user_status_minutes;
+        } else if(elapsed<86_400_000L) {
+            value=elapsed/3_600_000L;
+            formsResource=R.array.user_status_hours;
+        } else {
+            value=elapsed/86_400_000L;
+            formsResource=R.array.user_status_days;
+        }
+
+        String[] forms=getResources().getStringArray(formsResource);
+        return getString(
+                R.string.user_status_last_seen,
+                value,
+                forms[getRussianPluralIndex(value)]
+        );
+    }
+
+    private int getRussianPluralIndex(long value) {
+        long positive=Math.abs(value);
+        long mod100=positive%100;
+        if(mod100>=11&&mod100<=19)return 2;
+        long mod10=positive%10;
+        if(mod10==1)return 0;
+        if(mod10>=2&&mod10<=4)return 1;
+        return 2;
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        if(isPrivateChat()) {
+            userStatusUpdatesActive=true;
+            userStatusHandler.removeCallbacks(userStatusUpdateRunnable);
+            userStatusHandler.post(userStatusUpdateRunnable);
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        userStatusUpdatesActive=false;
+        userStatusHandler.removeCallbacks(userStatusUpdateRunnable);
+        super.onStop();
+    }
+
     @Override
     protected void onDestroy() {
-        super.onDestroy();
+        if(messageAdapter!=null)messageAdapter.release();
+        if(hc!=null && chatInterfaceCallback!=null) {
+            hc.clearChatInterface(chatInterfaceCallback);
+        }
         historyJumpRequestId.incrementAndGet();
         pinnedLoadRequestId.incrementAndGet();
         messageSearchHandler.removeCallbacksAndMessages(null);
+        userStatusHandler.removeCallbacksAndMessages(null);
         if(historyJumpFuture!=null)historyJumpFuture.cancel(true);
         if(historyLoadFuture!=null)historyLoadFuture.cancel(true);
         if(initialHistoryFuture!=null)initialHistoryFuture.cancel(true);
         if(pinnedLoadFuture!=null)pinnedLoadFuture.cancel(true);
         if(messageSearchIndexFuture!=null)messageSearchIndexFuture.cancel(true);
         TaskExecutorManager.getInstance().cancelTasks("chat"+chatId);
+        if(plugins!=null)HalChatPlugins.close(plugins);
+        super.onDestroy();
     }
 
     @Override

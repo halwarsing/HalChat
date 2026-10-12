@@ -36,6 +36,17 @@ public class MessageHistoryTest {
         assertEquals(newest,MessageHistory.newestRealMessage(messages));
     }
 
+    @Test
+    public void historyBoundsIgnorePendingMessages() {
+        HCMessage old=message(100,0);
+        HCMessage newest=message(300,0);
+        HCMessage pending=message(-1,0);
+        List<HCMessage> messages=Arrays.asList(old,newest,pending);
+
+        assertEquals(old,MessageHistory.oldestRealMessage(messages));
+        assertEquals(newest,MessageHistory.newestRealMessage(messages));
+    }
+
     private static HCMessage message(long msgId,int type) {
         return new HCMessage(
                 -1,msgId,1,2,3,-1,-1,"",

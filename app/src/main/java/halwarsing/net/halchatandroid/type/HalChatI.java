@@ -5,4 +5,6 @@ public interface HalChatI {
     void onLoadMessage(HCMessage message);
     void onDeleteMessage(long id);
     void onEditMessage(HCMessage message);
+    void onReadMessage(long chatId,long msgId);
+    default void onPasswordAvailable(long chatId) {}
 }

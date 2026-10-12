@@ -59,8 +59,8 @@ public class HalChat {
     protected String codeUser;
     protected Context context;
     protected boolean isLogIn=false;
-    protected HalChatI chatInterface=null;
-    protected HalChatWS chatWS=null;
+    protected volatile HalChatI chatInterface=null;
+    protected volatile HalChatWS chatWS=null;
     protected ChatListI chatListI=null;
     protected PasswordSync passwordSync=null;
     protected HalChatSettingsApp chatSettingsApp=null;
@@ -210,7 +210,8 @@ public class HalChat {
                     @Override
                     public void onAvailable(@NonNull Network network) {
                         super.onAvailable(network);
-                        chatGroupChats.checkSendMessages();
+                        sharedClient.connectionPool().evictAll();
+                        chatGroupChats.onNetworkAvailable();
                         chatGroupChats.checkChats();
                         hcActions.syncActions();
                     }
@@ -377,6 +378,10 @@ public class HalChat {
     //CHAT INTERFACE
     protected void setChatInterface(HalChatI chatInterface) {
         this.chatInterface=chatInterface;
+    }
+
+    protected void clearChatInterface(HalChatI expectedInterface) {
+        if(this.chatInterface==expectedInterface)this.chatInterface=null;
     }
 
     protected void onNewAction(Object... args) {

@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background"
+    android:orientation="vertical"
+    tools:context=".localai.LocalAiTestActivity">
+
+    <include
+        android:id="@+id/toolbar"
+        layout="@layout/back_toolbar_layout" />
+
+    <ScrollView
+        android:id="@+id/localAiScroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/local_ai_title"
+                android:textColor="@color/textColor"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/localAiStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/local_ai_status_ready"
+                android:textColor="@color/textHintColor"
+                android:textIsSelectable="true" />
+
+            <ProgressBar
+                android:id="@+id/localAiProgress"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:max="1000"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/localAiModelName"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/local_ai_no_model"
+                android:textColor="@color/textColor"
+                android:textIsSelectable="true" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/localAiSelectModel"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/local_ai_select_model" />
+
+                <Button
+                    android:id="@+id/localAiLoadModel"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:enabled="false"
+                    android:text="@string/local_ai_load_model" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/localAiContextSize"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="@drawable/round_input"
+                    android:hint="@string/local_ai_context_size"
+                    android:inputType="number"
+                    android:maxLength="6"
+                    android:padding="12dp"
+                    android:text="2048"
+                    android:textColor="@color/textColor"
+                    android:textColorHint="@color/textHintColor" />
+
+                <EditText
+                    android:id="@+id/localAiThreads"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/round_input"
+                    android:hint="@string/local_ai_threads"
+                    android:inputType="number"
+                    android:maxLength="2"
+                    android:padding="12dp"
+                    android:text="4"
+                    android:textColor="@color/textColor"
+                    android:textColorHint="@color/textHintColor" />
+
+                <EditText
+                    android:id="@+id/localAiMaxTokens"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/round_input"
+                    android:hint="@string/local_ai_max_tokens"
+                    android:inputType="number"
+                    android:maxLength="5"
+                    android:padding="12dp"
+                    android:text="256"
+                    android:textColor="@color/textColor"
+                    android:textColorHint="@color/textHintColor" />
+            </LinearLayout>
+
+            <EditText
+                android:id="@+id/localAiSystemPrompt"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/round_input"
+                android:gravity="top|start"
+                android:hint="@string/local_ai_system_prompt"
+                android:inputType="textCapSentences|textMultiLine"
+                android:minLines="2"
+                android:padding="12dp"
+                android:text="@string/local_ai_default_system_prompt"
+                android:textColor="@color/textColor"
+                android:textColorHint="@color/textHintColor" />
+
+            <EditText
+                android:id="@+id/localAiUserPrompt"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/round_input"
+                android:gravity="top|start"
+                android:hint="@string/local_ai_user_prompt"
+                android:inputType="textCapSentences|textMultiLine"
+                android:minLines="3"
+                android:padding="12dp"
+                android:textColor="@color/textColor"
+                android:textColorHint="@color/textHintColor" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/localAiGenerate"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:enabled="false"
+                    android:text="@string/local_ai_generate" />
+
+                <Button
+                    android:id="@+id/localAiStop"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:enabled="false"
+                    android:text="@string/local_ai_stop" />
+
+                <Button
+                    android:id="@+id/localAiUnload"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:enabled="false"
+                    android:text="@string/local_ai_unload_model" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/local_ai_output"
+                android:textColor="@color/textColor"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/localAiOutput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/round_input"
+                android:minHeight="160dp"
+                android:padding="12dp"
+                android:textColor="@color/textColor"
+                android:textIsSelectable="true" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

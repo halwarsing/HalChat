@@ -142,6 +142,27 @@
     <string name="offline_text">Нет подключения</string>
     <string name="offline_retry">Проверьте интернет-соединение и попробуйте ещё раз</string>
     <string name="offline_retry_btn">Повторить</string>
+    <string name="message_sending">Сообщение отправляется</string>
+    <string name="message_sent_unread">Сообщение доставлено, но ещё не прочитано</string>
+    <string name="user_status_loading">Обновление статуса…</string>
+    <string name="user_status_online">В сети</string>
+    <string name="user_status_recently">Был(-а) недавно</string>
+    <string name="user_status_last_seen">Был(-а) %1$d %2$s назад</string>
+    <string-array name="user_status_minutes">
+        <item>минуту</item>
+        <item>минуты</item>
+        <item>минут</item>
+    </string-array>
+    <string-array name="user_status_hours">
+        <item>час</item>
+        <item>часа</item>
+        <item>часов</item>
+    </string-array>
+    <string-array name="user_status_days">
+        <item>день</item>
+        <item>дня</item>
+        <item>дней</item>
+    </string-array>
 
     <!-- Settings APP -->
     <string name="settings_app_auto_psw">Автоматический обмен паролями</string>
@@ -211,4 +232,25 @@
     <string name="unpin_message">Открепить</string>
     <string name="pin_message_failed">Не удалось изменить закрепление</string>
     <string name="delete_msg">Удалить</string>
+    <string name="status_msg_sending">…</string>
+
+    <string name="hdw_yes">Ок</string>
+    <string name="hdw_no">Отмена</string>
+
+    <string name="local_ai_open_test">Локальный ИИ (тест)</string>
+    <string name="local_ai_title">Локальный ИИ — тест</string>
+    <string name="local_ai_select_model">Выбрать GGUF</string>
+    <string name="local_ai_load_model">Загрузить модель</string>
+    <string name="local_ai_unload_model">Выгрузить</string>
+    <string name="local_ai_generate">Запустить</string>
+    <string name="local_ai_stop">Остановить</string>
+    <string name="local_ai_no_model">Модель не выбрана</string>
+    <string name="local_ai_system_prompt">Системный prompt</string>
+    <string name="local_ai_user_prompt">Ваше сообщение</string>
+    <string name="local_ai_output">Ответ модели</string>
+    <string name="local_ai_context_size">Контекст</string>
+    <string name="local_ai_threads">Потоки</string>
+    <string name="local_ai_max_tokens">Макс. токенов</string>
+    <string name="local_ai_status_ready">Выберите GGUF-модель</string>
+    <string name="local_ai_default_system_prompt">Ты полезный ассистент. Отвечай на русском языке.</string>
 </resources>
