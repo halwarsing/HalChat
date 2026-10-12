@@ -7,6 +7,7 @@ import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.Spinner;
 import android.widget.Toast;
 
@@ -36,6 +37,7 @@ public class AddChatActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
 
+
         HalChatApp app=(HalChatApp)getApplicationContext();
         hc=app.getHalChat();
 
@@ -49,6 +51,11 @@ public class AddChatActivity extends AppCompatActivity {
         setSupportActionBar(toolbar);
 
         Objects.requireNonNull(getSupportActionBar()).setDisplayShowTitleEnabled(false);
+
+        ImageButton buttonBack=findViewById(R.id.toolbar_back);
+        buttonBack.setOnClickListener((View v)->{
+            finish();
+        });
 
         Spinner publicSpinner=findViewById(R.id.spinnerPublicChat);
         ArrayAdapter publicChatAdapter=new ArrayAdapter(this,R.layout.selected_item,publicChatList);

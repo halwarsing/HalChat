@@ -3,11 +3,14 @@ package halwarsing.net.halchatandroid.type;
 import android.graphics.Bitmap;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 //Класс сообщения (вся информация)
 public class HCMessage {
@@ -128,5 +131,50 @@ public class HCMessage {
             updatedReactions.add(new MessageReaction(newReaction,1));
         }
         setReactions(updatedReactions,newReaction);
+    }
+
+    public JSONObject getPlugins() {
+        if(dataBot==null||dataBot.length()<3||dataBot.equals("-1"))return new JSONObject();
+        try {
+            JSONObject plugins=new JSONObject(dataBot).optJSONObject("plugins");
+            return plugins==null?new JSONObject():plugins;
+        } catch (JSONException e) {
+            return new JSONObject();
+        }
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String,Object> out=new HashMap<>();
+
+        out.put("uid",msgId);
+        out.put("fromChat",chatId);
+        out.put("fromId",fromId);
+
+        //TODO добавить передачу данных о пользователе
+        out.put("fromIcon",icon);
+        //out.put("fromNickname",nickname);
+        out.put("message",decryptedMessage);
+        out.put("msgText",decryptedMessage);
+
+        List<String> latts=new ArrayList<>();
+        for (int i=0;i<attachments.length();i++) {
+            latts.add(attachments.optString(i,""));
+        }
+        out.put("attachments",latts);
+
+        out.put("time",time);
+        out.put("receive_message_sound",soundMsg);
+        out.put("soundMsg",soundMsg);
+        out.put("answerMsg",answerMsg);
+        out.put("type",type);
+        out.put("commentMsg",commentMsg);
+        out.put("recordMic",recordMic);
+        out.put("v",v);
+        out.put("data",data);
+        out.put("pixelId",pixelId);
+        out.put("dataBot",dataBot);
+        out.put("isPinned",isPinned);
+
+        return out;
     }
 }

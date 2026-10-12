@@ -31,7 +31,7 @@ final class MessageHistory {
 
     static HCMessage oldestRealMessage(List<HCMessage> messages) {
         for (HCMessage message : messages) {
-            if (message.type != -1) {
+            if (message.type != -1 && message.msgId>=0) {
                 return message;
             }
         }
@@ -41,7 +41,7 @@ final class MessageHistory {
     static HCMessage newestRealMessage(List<HCMessage> messages) {
         for (int i = messages.size() - 1; i >= 0; i--) {
             HCMessage message = messages.get(i);
-            if (message.type != -1) {
+            if (message.type != -1 && message.msgId>=0) {
                 return message;
             }
         }

@@ -343,6 +343,7 @@ public class MainActivity extends AppCompatActivity {
 
         //Initialize variables
         ImageButton addChatImgBtn=findViewById(R.id.addChatImgBtn);
+        ImageButton addAIChatImgBtn=findViewById(R.id.addAIChatImgBtn);
         ImageButton buttonMenu=findViewById(R.id.toolbar_menu);
         Toolbar toolbar=findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
@@ -351,6 +352,10 @@ public class MainActivity extends AppCompatActivity {
         //Set event on click buttons
         addChatImgBtn.setOnClickListener(v -> {
             startActivity(new Intent(MainActivity.this, AddChatActivity.class));
+        });
+
+        addAIChatImgBtn.setOnClickListener(v->{
+            startActivity(new Intent(MainActivity.this,AIListActivity.class));
         });
 
         buttonMenu.setOnClickListener((View v0)->{

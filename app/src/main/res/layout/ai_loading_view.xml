@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/LLLMHSMLoadScreen"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="16dp"
+    android:background="@drawable/gradient_background_selector">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="@drawable/round_background">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:textSize="@dimen/bigText"
+            android:textStyle="bold"
+            android:text="ИИ запускается на вашем устройстве"/>
+
+        <!-- HERO -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+            <ProgressBar
+                style="?android:attr/progressBarStyleSmall"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginEnd="12dp"
+                android:indeterminate="true"
+                android:indeterminateTint="@color/accent1"/>
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:id="@+id/LLLMHSMStage"
+                    android:textStyle="bold"
+                    android:accessibilityLiveRegion="polite"
+                    android:text="Подготавливаем ИИ"/>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:id="@+id/LLLMHSMStatus"
+                    android:textSize="@dimen/tinyText"
+                    android:textColor="@color/textHintColor"
+                    android:text="Проверяем браузер и сохранённые файлы…"/>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- PROGRESS -->
+        <ProgressBar
+            android:layout_width="match_parent"
+            android:layout_height="12dp"
+            android:layout_marginTop="16dp"
+            android:id="@+id/LLLMHSMProgressDiv"
+            style="@style/halprogressbar"
+            android:indeterminate="true"
+            android:indeterminateDrawable="@drawable/custom_progresssbar"
+            android:indeterminateDuration="1500"
+            android:max="1000"
+            android:progress="0"
+            android:contentDescription="Прогресс запуска ИИ"/>
+
+        <!-- PROGRESS META -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:orientation="horizontal">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:id="@+id/LLLMHSMProgressText"
+                android:textSize="@dimen/smallText"
+                android:textStyle="bold"
+                android:text="Подготовка…"/>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:id="@+id/LLLMHSMFileCounter"
+                android:textSize="@dimen/smallText"
+                android:textColor="@color/textHintColor"
+                android:text="Считаем файлы…"/>
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/LLLMHSMLoadFileName"
+            android:textSize="@dimen/tinyText"
+            android:textColor="@color/textHintColor"
+            android:singleLine="true"
+            android:ellipsize="middle"/>
+
+        <!-- STEPS -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="horizontal">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:id="@+id/LLLMHSMStep1"
+                android:textSize="@dimen/tinyText"
+                android:textColor="@color/accent1"
+                android:text="1 Подготовка"/>
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:id="@+id/LLLMHSMStep2"
+                android:textSize="@dimen/tinyText"
+                android:gravity="center_horizontal"
+                android:alpha="0.4"
+                android:text="2 Файлы модели"/>
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:id="@+id/LLLMHSMStep3"
+                android:textSize="@dimen/tinyText"
+                android:gravity="end"
+                android:alpha="0.4"
+                android:text="3 Запуск ИИ"/>
+        </LinearLayout>
+
+        <!-- TIME -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="horizontal">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="@dimen/tinyText"
+                android:text="Прошло "/>
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:id="@+id/LLLMHSMElapsed"
+                android:textSize="@dimen/tinyText"
+                android:textStyle="bold"
+                android:text="0:00"/>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:id="@+id/LLLMHSMEta"
+                android:textSize="@dimen/tinyText"
+                android:textColor="@color/textHintColor"
+                android:text="Оцениваем оставшееся время…"/>
+        </LinearLayout>
+
+        <!-- FACT -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="horizontal"
+            android:padding="12dp"
+            android:background="@drawable/round_second_background">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:importantForAccessibility="no"
+                android:text="💡"/>
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="@dimen/smallText"
+                    android:textStyle="bold"
+                    android:text="Пока загружается"/>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:id="@+id/LLLMHSMFactText"
+                    android:textSize="@dimen/tinyText"
+                    android:textColor="@color/textHintColor"/>
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

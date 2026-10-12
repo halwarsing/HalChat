@@ -25,6 +25,8 @@ import com.bumptech.glide.Glide;
 import com.bumptech.glide.request.target.CustomTarget;
 import com.bumptech.glide.request.transition.Transition;
 
+import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
@@ -37,6 +39,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
@@ -354,6 +358,91 @@ public class HalChatFunctionsLib {
 
         }
         return spannableString;
+    }
+
+    public static double round(double value, int places) {
+        if(places<0)return 0.0;
+
+        BigDecimal bd=BigDecimal.valueOf(value);
+        bd=bd.setScale(places, RoundingMode.HALF_UP);
+        return bd.doubleValue();
+    }
+
+    public static long getLongCursor(Cursor cursor, String name) {
+        int idx=cursor.getColumnIndex(name);
+        if(idx<0)return 0L;
+        return cursor.getLong(idx);
+    }
+
+    public static int getIntCursor(Cursor cursor, String name) {
+        int idx=cursor.getColumnIndex(name);
+        if(idx<0)return 0;
+        return cursor.getInt(idx);
+    }
+
+    public static String getStringCursor(Cursor cursor, String name) {
+        int idx=cursor.getColumnIndex(name);
+        if(idx<0)return "";
+        return cursor.getString(idx);
+    }
+
+    public static short getShortCursor(Cursor cursor, String name) {
+        int idx=cursor.getColumnIndex(name);
+        if(idx<0)return 0;
+        return cursor.getShort(idx);
+    }
+
+    public static float getFloatCursor(Cursor cursor, String name) {
+        int idx=cursor.getColumnIndex(name);
+        if(idx<0)return 0.0f;
+        return cursor.getFloat(idx);
+    }
+
+    public static double getDoubleCursor(Cursor cursor, String name) {
+        int idx=cursor.getColumnIndex(name);
+        if(idx<0)return 0.0;
+        return cursor.getDouble(idx);
+    }
+
+    public static byte[] getBlobCursor(Cursor cursor, String name) {
+        int idx=cursor.getColumnIndex(name);
+        if(idx<0)return new byte[]{};
+        return cursor.getBlob(idx);
+    }
+
+    public static JSONObject getJSONObjectCursor(Cursor cursor, String name) {
+        int idx=cursor.getColumnIndex(name);
+        if(idx<0)return new JSONObject();
+
+        String text=cursor.getString(idx);
+
+        try {
+            return new JSONObject(text);
+        } catch (JSONException e) {
+            Log.e(TAG,"Error getJSONObject from Cursor: ",e);
+            return new JSONObject();
+        }
+    }
+
+    public static JSONArray getJSONArrayCursor(Cursor cursor, String name) {
+        int idx=cursor.getColumnIndex(name);
+        if(idx<0)return new JSONArray();
+
+        String text=cursor.getString(idx);
+
+        try {
+            return new JSONArray(text);
+        } catch (JSONException e) {
+            Log.e(TAG,"Error getJSONArray from Cursor: ",e);
+            return new JSONArray();
+        }
+    }
+
+    public static boolean getBooleanCursor(Cursor cursor,String name) {
+        int idx=cursor.getColumnIndex(name);
+        if(idx<0)return false;
+
+        return cursor.getInt(idx)>0;
     }
 }
 

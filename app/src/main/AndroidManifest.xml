@@ -30,6 +30,9 @@
         android:theme="@style/AppTheme"
         tools:targetApi="31">
         <activity
+            android:name=".main.AIListActivity"
+            android:exported="false" />
+        <activity
             android:name=".main.JoinChatByLinkActivity"
             android:exported="false" />
         <activity
@@ -84,6 +87,11 @@
             android:name=".main.SettingsAppActivity"
             android:exported="false" />
         <activity
+            android:name=".localai.LocalAiTestActivity"
+            android:exported="false"
+            android:screenOrientation="unspecified"
+            android:theme="@style/AppTheme" />
+        <activity
             android:name=".main.ChangeAvatarActivity"
             android:exported="false" />
         <activity
@@ -124,9 +132,9 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
+
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
@@ -135,13 +143,15 @@
                 <data android:host="halchat.halwarsing.net" />
                 <data android:pathPrefix="/joinChatLink" />
             </intent-filter>
-
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
+
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data android:scheme="hc" android:host="join" />
+                <data
+                    android:host="join"
+                    android:scheme="hc" />
             </intent-filter>
         </activity>
 

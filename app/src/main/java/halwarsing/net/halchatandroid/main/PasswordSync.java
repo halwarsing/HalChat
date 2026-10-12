@@ -128,6 +128,9 @@ public class PasswordSync {
     public CompletableFuture<Void> requestMissingPassword(long chatUID) {
         if(chatUID>0&&!hc.chatGroupChats.hasPasswordChat(chatUID)) {
             try {
+                if(RSACipher.hasPrivateKeyRSA(hc.context,chatUID)) {
+                    return checkRequestPassword(chatUID);
+                }
                 CompletableFuture<Void> future=new CompletableFuture<>();
 
                 RSACipher rsa=new RSACipher(hc.context,chatUID);
@@ -137,9 +140,11 @@ public class PasswordSync {
                 postData.put("chatId",chatUID);
                 postData.put("publicKey",publicKeyHex);
 
-                hc.hcapi.apiReq("requestPasswordAuto",postData).thenAccept(data->{
+                hc.hcapi.apiReq("requestPasswordAuto",postData).whenComplete((data,error)->{
                     try {
-                        if(data.getInt("errorCode")==0) {
+                        if(error!=null) {
+                            Log.e(TAG,"Unable to request password for chatUID:"+chatUID,error);
+                        } else if(data.getInt("errorCode")==0) {
                             Log.e(TAG,"Successfully request missing password chatUID:"+chatUID);
                         } else {
                             Log.e(TAG,"Error requestPasswordAuto: "+data.getString("error")+";"+data.getInt("errorCode"));
@@ -190,6 +195,11 @@ public class PasswordSync {
 
                 Log.e(TAG,"Successfully decrypted received password chatUID:"+chatUID);
                 hc.db.execSQL("UPDATE `groupChats` SET `password`=? WHERE `chatUID`=?", new String[]{decryptedPassword, String.valueOf(chatUID)});
+                RSACipher.deletePrivateKeyRSA(hc.context,chatUID);
+
+                if(hc.chatInterface!=null) {
+                    hc.chatInterface.onPasswordAvailable(chatUID);
+                }
 
                 //Download chat messages and additional info
                 hc.chatGroupChats.checkChat(chatUID);
@@ -216,9 +226,11 @@ public class PasswordSync {
                 JSONObject postData=new JSONObject();
                 postData.put("chatId",chatUID);
 
-                hc.hcapi.apiReq("getRequestPasswordAuto",postData).thenAccept(data->{
+                hc.hcapi.apiReq("getRequestPasswordAuto",postData).whenComplete((data,error)->{
                     try {
-                        if (data.getInt("errorCode") == 0) {
+                        if(error!=null) {
+                            Log.e(TAG,"Unable to check password for chatUID:"+chatUID,error);
+                        } else if (data.getInt("errorCode") == 0) {
                             Log.e(TAG, "Successfully received password chatUID:" + chatUID);
                             decryptRequestPassword(chatUID,data.getString("psw"));
                         } else if(data.getInt("errorCode")==5) {

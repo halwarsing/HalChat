@@ -4,10 +4,10 @@ import android.database.sqlite.SQLiteDatabase;
 import android.util.Log;
 
 import org.json.JSONArray;
-import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import halwarsing.net.halchatandroid.type.HCAction;
 
@@ -17,6 +17,8 @@ public class HalChatActions {
     private final String codeUser;
     private final long userId;
     private final HalChat hc;
+    private final AtomicBoolean syncInProgress=new AtomicBoolean(false);
+    private final AtomicBoolean syncAgain=new AtomicBoolean(false);
 
     public HalChatActions(SQLiteDatabase db,String codeUser,long userId,HalChat hc) {
         this.db=db;
@@ -27,36 +29,62 @@ public class HalChatActions {
 
 
     protected void syncActions() {
+        if(!syncInProgress.compareAndSet(false,true)) {
+            syncAgain.set(true);
+            return;
+        }
+
         try {
+            long lastAction=hc.uidSystem.getUID("actions");
+
             JSONObject postData=new JSONObject();
-            postData.put("lastAction",Math.max(hc.uidSystem.getUID("actions"),0));
-            hc.hcapi.apiReq("getActions",postData).thenAccept(data->{
+            postData.put("lastAction",lastAction<0?-1:lastAction);
+            hc.hcapi.apiReq("getActions",postData).whenComplete((data,error)->{
                 try {
+                    if(error!=null) {
+                        Log.e(TAG,"Unable to sync actions",error);
+                        return;
+                    }
                     if(data.getLong("errorCode")==0) {
-                        JSONArray actions=data.getJSONArray("actions");
+                        JSONArray actions=data.optJSONArray("actions");
+                        if(actions==null)actions=new JSONArray();
+
+                        long newestActionId=getNewestActionId(actions);
 
                         if(actions.length()==0)return;
 
                         for(int i=0;i<actions.length();i++) {
-                            processAction(HCAction.getFromJSONAPI(actions.getJSONObject(i))).join();
+                            HCAction action=HCAction.getFromJSONAPI(actions.getJSONObject(i));
+                            if(action!=null)processAction(action).join();
                         }
 
-                        hc.uidSystem.setUID("actions",
-                                Math.max(
-                                        actions.getJSONObject(0).getLong("uid"),
-                                        actions.getJSONObject(actions.length()-1).getLong("uid")
-                                )
-                        );
+                        if(newestActionId>lastAction) {
+                            hc.uidSystem.setUID("actions",newestActionId);
+                        }
                     } else {
                         Log.e(TAG,"getActionsError: "+data.getLong("errorCode")+";"+data.getString("error"));
                     }
                 } catch (Exception e) {
                     Log.e(TAG,"getActions",e);
+                } finally {
+                    syncInProgress.set(false);
+                    if(syncAgain.getAndSet(false))syncActions();
                 }
             });
-        } catch (JSONException e) {
+        } catch (Exception e) {
+            syncInProgress.set(false);
+            if(syncAgain.getAndSet(false))syncActions();
             Log.e(TAG,"syncActions",e);
         }
+    }
+
+    private long getNewestActionId(JSONArray actions) {
+        long newest=-1;
+        for(int i=0;i<actions.length();i++) {
+            JSONObject action=actions.optJSONObject(i);
+            if(action!=null)newest=Math.max(newest,action.optLong("uid",-1));
+        }
+        return newest;
     }
 
 
@@ -86,6 +114,7 @@ public class HalChatActions {
                 break;
             case 7:
                 //Read message
+                hc.chatGroupChats.markMessageRead(action.fromChat,action.fromMsg);
                 break;
             case 10:
                 //exit chat

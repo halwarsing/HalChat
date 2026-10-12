@@ -5,8 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Rect;
 import android.net.Uri;
-import android.os.Handler;
-import android.os.Looper;
+import android.text.method.LinkMovementMethod;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -20,6 +19,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.core.content.FileProvider;
+import androidx.core.text.HtmlCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
@@ -28,14 +28,17 @@ import com.google.android.flexbox.FlexboxLayout;
 
 import org.json.JSONArray;
 import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -48,11 +51,16 @@ import halwarsing.net.halchatandroid.views.WaveformView;
 
 //Адаптер сообщения в чате
 public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
+    public interface PluginContentRenderer {
+        View create(String html);
+    }
+
     protected List<HCMessage> messageList;
     private Context context;
     private HalChat hc;
     private String password;
     private ChatActivity chatActivity;
+    private boolean active=true;
 
     private static final int TYPE_SENT=1;
     private static final int TYPE_RECEIVED=2;
@@ -62,13 +70,26 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     private static final String TAG="HCMA";
     private static final String PAYLOAD_REACTIONS="reactions";
     private static final String PAYLOAD_POLL="poll";
+    private static final String PAYLOAD_READ="read";
 
     //Sort system
     private final Set<Long> seenIds = new HashSet<>();
     private final Set<Long> pendingReactionLoads=ConcurrentHashMap.newKeySet();
+    private final Map<Long,List<String>> pluginContents=new ConcurrentHashMap<>();
+    private PluginContentRenderer pluginContentRenderer;
 
-    private static final Comparator<HCMessage> BY_UID =
-            Comparator.comparingLong(HCMessage::getMsgUID);
+    private static final Comparator<HCMessage> BY_UID=(first,second)->{
+        boolean firstPending=isPendingMessage(first);
+        boolean secondPending=isPendingMessage(second);
+        if(firstPending!=secondPending)return firstPending?1:-1;
+        if(firstPending) {
+            int timeOrder=Long.compare(first.time,second.time);
+            if(timeOrder!=0)return timeOrder;
+            // Temporary ids decrease as messages are created: -1, -2, -3...
+            return Long.compare(second.msgId,first.msgId);
+        }
+        return Long.compare(first.getMsgUID(),second.getMsgUID());
+    };
 
     private final HCMessage startMessage;
 
@@ -129,7 +150,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         } else if(msg.type==-1) {
             return TYPE_START_CHAT;
         }
-        return msg.isFrom?TYPE_SENT:TYPE_RECEIVED;
+        return msg.isFrom&&!msg.getPlugins().has("LocalBotMsg")?TYPE_SENT:TYPE_RECEIVED;
     }
 
     @NonNull
@@ -166,6 +187,9 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
      */
     protected void clearMessages(List<HCMessage> messages) {
         ArrayList<HCMessage> replacement=MessageHistory.sortedUnique(messages);
+        for(HCMessage currentMessage:messageList) {
+            if(isPendingMessage(currentMessage))replacement.add(currentMessage);
+        }
         replacement.add(startMessage);
         replacement.sort(BY_UID);
         this.messageList=replacement;
@@ -267,6 +291,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         msgv.boundMessageId=message.msgId;
         long bindingVersion=++msgv.bindingVersion;
         msgv.avatar.setImageResource(R.drawable.ic_add_people);
+        bindReadStatus(msgv,message);
 
         msgv.pollVariantsDiv.setVisibility(View.GONE);
 
@@ -300,13 +325,15 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             return fromUser;
         }).thenAccept(fromUser->
                 chatActivity.runOnUiThread(() -> {
-            if (msgv.boundMessageId != message.msgId || msgv.bindingVersion != bindingVersion) {
+            if (!isCurrentBinding(msgv,message,bindingVersion)) {
                 return;
             }
 
+            JSONObject localBot=message.getPlugins().optJSONObject("LocalBotMsg");
             String authorName=chatActivity.chat.chatType==2
                     ? chatActivity.chat.name
                     : fromUser==null ? String.valueOf(message.fromId) : fromUser.nickname;
+            if(localBot!=null)authorName=localBot.optString("nickname",authorName);
             msgv.nickname.setText(authorName);
             msgv.messageText.setText(HalChatFunctionsLib.replaceEmojis(context,msgv.messageText,hc,message.decryptedMessage),TextView.BufferType.SPANNABLE);
             msgv.messageTime.setText(HalChatGroupChatsMessages.convertTime(message.time));
@@ -328,22 +355,24 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         params.width = ViewGroup.LayoutParams.WRAP_CONTENT;
         msgv.messageLL.setLayoutParams(params);*/
 
-            String avatarId=chatActivity.chat.chatType==2
+            String avatarId=localBot!=null&&localBot.has("icon")
+                    ? localBot.optString("icon")
+                    : chatActivity.chat.chatType==2
                     ? chatActivity.chat.icon
                     : fromUser==null ? null : fromUser.icon;
             if(avatarId!=null) {
                 hc.hd.getFileById(avatarId).thenAccept(fileIcon->{
-                new Handler(Looper.getMainLooper()).post(() -> {
-                    if(msgv.boundMessageId==message.msgId && msgv.bindingVersion==bindingVersion) {
-                        Glide.with(context)
-                                .load(fileIcon)
-                                .override(150, 150)
-                                .placeholder(R.drawable.ic_add_people)
-                                .diskCacheStrategy(DiskCacheStrategy.ALL)
-                                .skipMemoryCache(false)
-                                .into(msgv.avatar);
-                    }
-                });
+                    chatActivity.runOnUiThread(() -> {
+                        if(isCurrentBinding(msgv,message,bindingVersion)) {
+                            Glide.with(msgv.itemView)
+                                    .load(fileIcon)
+                                    .override(150, 150)
+                                    .placeholder(R.drawable.ic_add_people)
+                                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                                    .skipMemoryCache(false)
+                                    .into(msgv.avatar);
+                        }
+                    });
                 }).exceptionally(error -> {
                     Log.e(TAG,"Unable to load message avatar "+avatarId,error);
                     return null;
@@ -372,9 +401,12 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                         if(answerUser==null) {
                             return;
                         }
-                        HCMessage decryptedAnswer=hc.chatGroupChats.decryptMessage(answerHCM[0],password);
+                        HCMessage decryptedAnswer=hc.chatGroupChats.decryptMessage(
+                                answerHCM[0],
+                                hc.chatGroupChats.getPasswordChat(answerHCM[0].chatId)
+                        );
                         chatActivity.runOnUiThread(() -> {
-                            if(msgv.boundMessageId!=message.msgId || msgv.bindingVersion!=bindingVersion) {
+                            if(!isCurrentBinding(msgv,message,bindingVersion)) {
                                 return;
                             }
                             answerNickname.setText(answerUser.nickname);
@@ -407,7 +439,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 hc.hd.getFileById(message.recordMic).thenAccept(file->{
                     String filePathAudio=file.getAbsolutePath();
                     chatActivity.runOnUiThread(() -> {
-                        if(msgv.boundMessageId!=message.msgId || msgv.bindingVersion!=bindingVersion) {
+                        if(!isCurrentBinding(msgv,message,bindingVersion)) {
                             return;
                         }
                         recordMicDiv.init(textViewTimespanAudio,waveformView,imageButton);
@@ -423,7 +455,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                             recordMicDiv.setAudio(chatActivity,filePathAudio);
                             int[] waveform=waveformView.generateWaveformFromAudioFile(filePathAudio, samplesCount);
                             chatActivity.runOnUiThread(() -> {
-                                if(msgv.boundMessageId==message.msgId && msgv.bindingVersion==bindingVersion) {
+                                if(isCurrentBinding(msgv,message,bindingVersion)) {
                                     waveformView.setWaveformData(waveform);
                                 }
                             });
@@ -444,8 +476,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                             HDFile hdFile = hc.hd.getHDFileById(attachmentId);
                             chatActivity.runOnUiThread(() -> {
                                 if (hdFile != null
-                                        && msgv.boundMessageId == message.msgId
-                                        && msgv.bindingVersion == bindingVersion) {
+                                        && isCurrentBinding(msgv,message,bindingVersion)) {
                                     bindAttachment(msgv, file, hdFile);
                                 }
                             });
@@ -470,10 +501,10 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 msgv.messageText.setVisibility(View.GONE);
 
                 hc.hd.getFileById(hc.EPSystem.getPixelById(message.pixelId).image).thenAccept(file->{
-                    new Handler(Looper.getMainLooper()).post(() -> {
-                        if(msgv.boundMessageId==message.msgId && msgv.bindingVersion==bindingVersion) {
+                    chatActivity.runOnUiThread(() -> {
+                        if(isCurrentBinding(msgv,message,bindingVersion)) {
                             msgv.pixelDiv.setVisibility(View.VISIBLE);
-                            Glide.with(context)
+                            Glide.with(msgv.itemView)
                                     .asDrawable()
                                     .load(file)
                                     .diskCacheStrategy(DiskCacheStrategy.ALL)
@@ -503,9 +534,9 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             );
             fileIcon = itemFile.findViewById(R.id.fileicon);
 
-            if (hdFile.imageData != null) {
-                int originalWidth = hdFile.imageData.optInt("width");
-                int originalHeight = hdFile.imageData.optInt("height");
+            if (hdFile.mimeData != null) {
+                int originalWidth = hdFile.mimeData.optInt("width");
+                int originalHeight = hdFile.mimeData.optInt("height");
 
                 if (originalWidth > 0 && originalHeight > 0) {
                     int maxWidthPx = (int) (250 * context.getResources().getDisplayMetrics().density);
@@ -524,7 +555,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 }
             }
 
-            Glide.with(context)
+            Glide.with(holder.itemView)
                     .asDrawable()
                     .load(file)
                     .diskCacheStrategy(DiskCacheStrategy.ALL)
@@ -622,9 +653,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 }
                 hc.hd.getFileById(emoji.image).thenAccept(file->
                     chatActivity.runOnUiThread(()->{
-                        if(holder.boundMessageId==message.msgId
-                                && holder.bindingVersion==bindingVersion) {
-                            Glide.with(context)
+                        if(isCurrentBinding(holder,message,bindingVersion)) {
+                            Glide.with(holder.itemView)
                                     .load(file)
                                     .diskCacheStrategy(DiskCacheStrategy.ALL)
                                     .skipMemoryCache(false)
@@ -679,6 +709,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     static class MessageViewHolder extends RecyclerView.ViewHolder {
         long boundMessageId = Long.MIN_VALUE;
         long bindingVersion = 0;
+        View unreadDot;
+        TextView pendingStatus;
         ImageView avatar;
         TextView messageText, messageTime,nickname;
         LinearLayout answerMsgDiv;
@@ -696,6 +728,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             super(itemView);
             messageText = itemView.findViewById(R.id.message_text);
             messageTime = itemView.findViewById(R.id.message_time);
+            unreadDot=itemView.findViewById(R.id.message_unread_dot);
+            pendingStatus=itemView.findViewById(R.id.message_pending_status);
             answerMsgDiv=itemView.findViewById(R.id.answerMsgDiv);
             attachments=itemView.findViewById(R.id.attachments);
             nickname=itemView.findViewById(R.id.nicknameMsg);
@@ -768,6 +802,13 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             MessageViewHolder messageHolder=(MessageViewHolder)holder;
             messageHolder.boundMessageId=message.msgId;
             bindPoll(messageHolder,message);
+            return;
+        }
+        if(payloads.contains(PAYLOAD_READ) && holder instanceof MessageViewHolder) {
+            HCMessage message=messageList.get(position);
+            MessageViewHolder messageHolder=(MessageViewHolder)holder;
+            messageHolder.boundMessageId=message.msgId;
+            bindReadStatus(messageHolder,message);
             return;
         }
         super.onBindViewHolder(holder,position,payloads);
@@ -867,6 +908,72 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     protected void updateMessageReactions(long msgId) {
         int position=getPositionById(msgId);
         if(position!=-1)notifyItemChanged(position,PAYLOAD_REACTIONS);
+    }
+
+    private void bindReadStatus(MessageViewHolder holder,HCMessage message) {
+        holder.pendingStatus.setVisibility(message.isFrom && !message.isSended
+                ? View.VISIBLE
+                : View.GONE);
+        holder.unreadDot.setVisibility(message.isFrom && message.isSended && !message.isReceived
+                ? View.VISIBLE
+                : View.GONE);
+    }
+
+    protected void addDeliveredMessage(HCMessage deliveredMessage) {
+        int pendingPosition=findPendingMessage(deliveredMessage);
+        if(pendingPosition!=-1)removeMessageAt(pendingPosition);
+        addMessageLoaded(deliveredMessage);
+    }
+
+    protected void replacePendingMessage(long pendingMessageId,HCMessage deliveredMessage) {
+        int pendingPosition=getPositionById(pendingMessageId);
+        if(pendingPosition==-1)pendingPosition=findPendingMessage(deliveredMessage);
+        if(pendingPosition!=-1)removeMessageAt(pendingPosition);
+        addMessageLoaded(deliveredMessage);
+    }
+
+    private int findPendingMessage(HCMessage deliveredMessage) {
+        if(deliveredMessage.encryptId==null || deliveredMessage.encryptId.length==0)return -1;
+        for(int i=0;i<messageList.size();i++) {
+            HCMessage candidate=messageList.get(i);
+            if(isPendingMessage(candidate)
+                    && candidate.chatId==deliveredMessage.chatId
+                    && Arrays.equals(candidate.encryptId,deliveredMessage.encryptId)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private void removeMessageAt(int position) {
+        HCMessage removed=messageList.remove(position);
+        seenIds.remove(removed.getMsgUID());
+        notifyItemRemoved(position);
+    }
+
+    private static boolean isPendingMessage(HCMessage message) {
+        return message.msgId<0 && message.isFrom && !message.isSended;
+    }
+
+    private boolean isCurrentBinding(MessageViewHolder holder,HCMessage message,long bindingVersion) {
+        return active
+                && !chatActivity.isFinishing()
+                && !chatActivity.isDestroyed()
+                && holder.boundMessageId==message.msgId
+                && holder.bindingVersion==bindingVersion;
+    }
+
+    protected void release() {
+        active=false;
+        pendingReactionLoads.clear();
+    }
+
+    protected void readMessage(long msgId) {
+        HCMessage message=getMessageById(msgId);
+        if(message==null)return;
+        message.isReceived=true;
+        int position=getPositionById(msgId);
+        if(position!=-1)notifyItemChanged(position,PAYLOAD_READ);
     }
 
     protected void updatePollResults() {

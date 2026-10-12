@@ -1,5 +1,6 @@
 package halwarsing.net.halchatandroid.main;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
@@ -33,7 +34,7 @@ public class HalDrive {
     private HDUploadFileEvent uploadFileEvent;
 
     //Если файл был загружен с устройства, чтобы не скачивать его, добавляем сразу в базу
-    public HDFile addLocalFile(String path,String name,long fromId, long updated, File file, String id, String mimeType, String fileType, String imageData) {
+    public HDFile addLocalFile(String path,String name,long fromId, long updated, File file, String id, String mimeType, String fileType, String mimeData) {
         if(isFileExists(id)||!file.exists()) {
            return getHDFileById(id);
         }
@@ -43,7 +44,7 @@ public class HalDrive {
         boolean isRenamed=file.renameTo(newFile);
 
         if(isRenamed) {
-            db.execSQL("INSERT INTO `files` (`id`, `path`, `name`, `fromId`, `updated`, `mimeType`, `fileType`, `imageData`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", new String[]{id, path, name, String.valueOf(fromId), String.valueOf(updated),mimeType,fileType,imageData});
+            db.execSQL("INSERT INTO `files` (`id`, `path`, `name`, `fromId`, `updated`, `mimeType`, `fileType`, `mimeData`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", new String[]{id, path, name, String.valueOf(fromId), String.valueOf(updated),mimeType,fileType,mimeData});
         } else {
             Log.e(TAG,"Rename failed");
         }
@@ -60,6 +61,20 @@ public class HalDrive {
     }
 
     private CompletableFuture<Void> downloadFile(String id, boolean isUpdate) {
+        return downloadFile(id, isUpdate, new HDDownloadFileEvent() {
+            @Override
+            public void onProgress(float progress, long total, long loaded) {
+
+            }
+
+            @Override
+            public void onDownloaded(HDFile file) {
+
+            }
+        });
+    }
+
+    private CompletableFuture<Void> downloadFile(String id, boolean isUpdate, HDDownloadFileEvent downloadFileEvent) {
         if(!isUpdate) {
             db.execSQL("INSERT INTO `files` (`id`, `path`, `name`, `fromId`, `updated`) VALUES (?, '-1', '-1', -1, -1)", new String[]{id});
         }
@@ -81,8 +96,8 @@ public class HalDrive {
                     connection.connect();
 
                     File saveFile=new File(directory,id+".hdf");
+                    File partFile=new File(directory,id+".hdf.part");
                     //Save file
-
 
                     Cursor cursors;
                     if(isUpdate){
@@ -96,22 +111,37 @@ public class HalDrive {
 
                     if (isEx) {
                         try(InputStream inputStream=new BufferedInputStream(connection.getInputStream());
-                            FileOutputStream outputStream=new FileOutputStream(saveFile)) {
+                            FileOutputStream outputStream=new FileOutputStream(partFile)) {
 
-                            byte[] buffer = new byte[4096];
+                            byte[] buffer = new byte[65536];
                             int bytesRead;
+                            long loaded=0;
+                            long lastProgress=0;
+                            long total=connection.getContentLengthLong();
                             while ((bytesRead = inputStream.read(buffer)) != -1) {
                                 outputStream.write(buffer, 0, bytesRead);
+                                loaded+=bytesRead;
+
+                                long now=System.currentTimeMillis();
+                                if(now-lastProgress>=100) {
+                                    lastProgress=now;
+                                    downloadFileEvent.onProgress(loaded*100.0f/total,total,loaded);
+                                }
                             }
+                            downloadFileEvent.onProgress(100.0f,total,loaded);
+
                             inputStream.close();
                             outputStream.close();
-                            db.execSQL("UPDATE `files` SET `path`=?, `name`=?, `fromId`=?, `updated`=?, `isFolder`=?, `mimeType`=?, `fileType`=?, `imageData`=? WHERE `id`=?",
+                            if(total>0&&loaded!=total)throw new IOException("Incomplete download "+loaded+"/"+total);
+                            if(!partFile.renameTo(saveFile))throw new IOException("Failed rename "+partFile);
+                            db.execSQL("UPDATE `files` SET `path`=?, `name`=?, `fromId`=?, `updated`=?, `isFolder`=?, `mimeType`=?, `fileType`=?, `mimeData`=? WHERE `id`=?",
                                     new String[]{data.getString("path"),data.getString("name"), String.valueOf(data.getLong("fromId")),
                                             String.valueOf(data.getLong("updated")), String.valueOf(data.getInt("isFolder")), data.getString("mimeType"),
-                                            data.getString("fileType"), data.getString("imageData"), id});
+                                            data.getString("fileType"), data.getString("mimeData"), id});
                             Log.e(TAG, "HalDrive File " + id + " successfully downloaded");
                         } catch (Exception e) {
-                            //Log.e(TAG,"ERROR SAVE FILE: ",e);
+                            partFile.delete();
+                            Log.e(TAG,"ERROR SAVE FILE: "+id,e);
                         }
                     } else {
                         Log.e(TAG, "HalDrive File is already existing: " + id);
@@ -127,13 +157,33 @@ public class HalDrive {
         });
     }
 
+    protected void deleteFile(String id) {
+        Cursor cursor=db.rawQuery("SELECT * FROM `files` WHERE `id`=?",new String[]{id});
+        if (!cursor.moveToFirst()) {
+            cursor.close();
+            return;
+        }
+
+        cursor.close();
+
+        File file=new File(directory,id+".hdf");
+        if(file.exists())file.delete();
+
+        db.execSQL("DELETE FROM `files` WHERE `id`=?",new String[]{id});
+    }
+
     //Скачивание файла
+    @SuppressLint("Range")
     public CompletableFuture<Void> addHalDriveFile(String id) {
         Cursor cursor=db.rawQuery("SELECT * FROM `files` WHERE `id`=?",new String[]{id});
         if (!cursor.moveToFirst()) {
             cursor.close();
             return downloadFile(id,false);
         } else {
+            if(cursor.getLong(cursor.getColumnIndex("updated"))==-1) {
+                db.execSQL("DELETE FROM `files` WHERE `id`=?",new String[]{id});
+                return downloadFile(id,false);
+            }
             cursor.close();
             Log.d(TAG,"File is exists "+ id);
         }
@@ -216,21 +266,39 @@ public class HalDrive {
     }
 
     public CompletableFuture<File> getFileById(String id) {
+        return getFileById(id, new HDDownloadFileEvent() {
+            @Override
+            public void onProgress(float progress, long total, long loaded) {
+
+            }
+
+            @Override
+            public void onDownloaded(HDFile file) {
+
+            }
+        });
+    }
+
+    public CompletableFuture<File> getFileById(String id, HDDownloadFileEvent downloadFileEvent) {
         File file=new File(directory,id+".hdf");
 
         Log.e(TAG,id+";"+file.exists());
         if(file.exists()) {
+            downloadFileEvent.onDownloaded(getHDFileById(id));
             return CompletableFuture.completedFuture(file);
         }
 
         CompletableFuture<File> result = new CompletableFuture<>();
         CompletableFuture<File> existing = downloadPromises.putIfAbsent(id, result);
         if (existing != null) {
+            existing.thenAccept(f->{
+                downloadFileEvent.onDownloaded(getHDFileById(id));
+            });
             return existing;
         }
 
         boolean hasDatabaseEntry = isFileExists(id);
-        downloadFile(id, hasDatabaseEntry).whenComplete((unused, error) -> {
+        downloadFile(id, hasDatabaseEntry, downloadFileEvent).whenComplete((unused, error) -> {
             File downloadedFile = new File(directory, id + ".hdf");
 
             if (error != null) {
@@ -243,6 +311,8 @@ public class HalDrive {
                 Log.e(TAG, "Файл скачался: " + id);
                 result.complete(downloadedFile);
             }
+
+            downloadFileEvent.onDownloaded(getHDFileById(id));
 
             downloadPromises.remove(id, result);
         });
@@ -328,5 +398,10 @@ public class HalDrive {
 
     public interface HDUploadFileEvent {
         void onUpload(HDFile file);
+    }
+
+    public interface HDDownloadFileEvent {
+        void onProgress(float progress, long total, long loaded);
+        void onDownloaded(HDFile file);
     }
 }
