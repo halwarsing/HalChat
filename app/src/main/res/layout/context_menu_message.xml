@@ -36,6 +36,16 @@
         android:textSize="16sp" />
 
     <TextView
+        android:id="@+id/save_files_message"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:padding="8dp"
+        android:text="@string/save_to_downloads"
+        android:textColor="@color/white"
+        android:textSize="16sp"
+        android:visibility="gone" />
+
+    <TextView
         android:id="@+id/pin_message"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"

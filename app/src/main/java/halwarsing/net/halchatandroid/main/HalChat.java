@@ -33,6 +33,7 @@ import java.util.concurrent.TimeUnit;
 
 import javax.net.ssl.HttpsURLConnection;
 
+import halwarsing.net.halchatandroid.encryption.HalChatCipher;
 import halwarsing.net.halchatandroid.type.ChatListI;
 import halwarsing.net.halchatandroid.type.HCAction;
 import halwarsing.net.halchatandroid.type.HCChat;
@@ -349,6 +350,7 @@ public class HalChat {
         //NAF: add delete all data and show login
         db.execSQL("DELETE FROM `sessions` WHERE `fromId`=?",new String[]{String.valueOf(idUser)});
         db.execSQL("DELETE FROM `groupChats`");
+        HalChatCipher.clearChatKeys();
         System.exit(0);
     }
 
@@ -423,44 +425,54 @@ public class HalChat {
             if(!chatGroupChats.addMessageToChatIfAbsent(msg)) {
                 return;
             }
-            msg=chatGroupChats.decryptMessage(msg,chatGroupChats.getPasswordChat(msg.chatId));
-
-            if (chatListI != null) {
-                chatListI.onNewMessage(chatGroupChats.getChatInfo(msg.chatId),msg);
-            }
-
-            if(msg.fromId!=idUser) {
-                if(chatInterface!=null){
-                    if(!chatInterface.onNewMessage(msg)) {
-                        notifNewMessage(msg);
-                    }
-                } else {
-                    notifNewMessage(msg);
-                }
-            } else if(chatInterface!=null){
-                chatInterface.onNewMessage(msg);
-            }
+            dispatchNewMessage(msg,false);
         } catch (Exception e) {
             Log.e(TAG,"onNewMessage",e);
         }
     }
 
-    protected void notifNewMessage(HCMessage msg) {
+    /**
+     * Передаёт новое сообщение списку чатов, открытому чату, а если чат не открыт — в уведомления.
+     * Уведомление только если сообщение удалось расшифровать (пароль чата известен)
+     *
+     * @param msg Сообщение, уже сохранённое в БД
+     * @param silent true - уведомление без звука
+     * @return void
+     */
+    protected void dispatchNewMessage(HCMessage msg,boolean silent) {
+        msg=chatGroupChats.decryptMessage(msg,chatGroupChats.getPasswordChat(msg.chatId));
+        if(chatListI!=null)chatListI.onNewMessage(chatGroupChats.getChatInfo(msg.chatId),msg);
+
+        HalChatI ci=chatInterface;
+        if(ci!=null&&ci.onNewMessage(msg))return;
+        // Без пароля (или с неверным) текст не расшифрован — уведомление с шифротекстом не показываем
+        if(msg.fromId!=idUser&&msg.isDecrypted)notifNewMessage(msg,silent);
+    }
+
+    /**
+     * Показывает уведомление о новом сообщении, если уведомления не выключены
+     *
+     * @param msg Расшифрованное сообщение
+     * @param silent true - без звука
+     * @return void
+     */
+    protected void notifNewMessage(HCMessage msg,boolean silent) {
         //if(msg.fromId==idUser)return;
         if(chatSettingsApp.getBoolean(HalChatSettingsApp.KEY_MUTE_NOTIFICATIONS))return;
         Log.e(TAG,"NotifNewMsg");
         try {
             HCChat chat=chatGroupChats.getChatInfo(msg.chatId);
+            String text=EPSystem.replaceEmojisToText(msg.decryptedMessage);
             if(chat.chatType==2) {
                 hd.getFileById(chat.icon).thenAccept(file->{
-                    NotificationHelper.showChatNotification(context,msg,chat,file.getAbsolutePath());
+                    NotificationHelper.showChatNotification(context,msg,text,chat,file.getAbsolutePath(),silent);
                 });
             } else {
                 hnUsers.getUserByUserId(msg.fromId,true).thenAccept(fromUser->{
                     hd.getFileById(fromUser.icon).thenAccept(file->{
                         fromUser.loadIcon(BitmapFactory.decodeFile(file.getAbsolutePath()));
                         hd.getFileById(chat.icon).thenAccept(file2->{
-                            NotificationHelper.showNotification(context,msg,chat,fromUser,file2.getAbsolutePath());
+                            NotificationHelper.showNotification(context,msg,text,chat,fromUser,file2.getAbsolutePath(),silent);
                         });
                     });
                 });

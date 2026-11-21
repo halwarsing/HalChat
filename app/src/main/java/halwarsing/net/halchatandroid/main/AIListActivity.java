@@ -26,7 +26,7 @@ import halwarsing.net.halchatandroid.encryption.RSAEncryptor;
 
 public class AIListActivity extends AppCompatActivity {
     private HalChat hc;
-    private LinearLayout mira,eva,kira;
+    private LinearLayout mira,eva,kira,umnik;
     private static final String TAG="AIListA";
 
     @Override

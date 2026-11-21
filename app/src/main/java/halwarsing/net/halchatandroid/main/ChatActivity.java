@@ -16,6 +16,7 @@ import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.media.MediaRecorder;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -54,6 +55,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -143,6 +145,10 @@ public class ChatActivity extends AppCompatActivity {
     private static final int REQUEST_RECORD_AUDIO_PERMISSION = 200;
     private boolean permissionToRecordAccepted = false;
     private final String[] permissions = {Manifest.permission.RECORD_AUDIO};
+
+    //Saving files (до Android 10 нужно WRITE_EXTERNAL_STORAGE)
+    private static final int REQUEST_SAVE_FILES_PERMISSION = 201;
+    private HCMessage pendingSaveMessage;
 
     //Answer / Edit Message
     private LinearLayout answerDiv;
@@ -1357,6 +1363,7 @@ public class ChatActivity extends AppCompatActivity {
 
     private void sendMessagePlugin(String text, List<String> attachments, String pluginData, String soundMsg) {
         if(isFinishing()||isDestroyed())return;
+        if(!canSendToChat())return;
         long t=System.currentTimeMillis();
 
         String dataBot="";
@@ -1418,6 +1425,7 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     private void editMessagePlugin(long msgId, String text) {
+        if(!canSendToChat())return;
         HCMessage message=hc.chatGroupChats.getMessageById(chatId,msgId);
         if(message==null)return;
 
@@ -1479,7 +1487,19 @@ public class ChatActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * Проверяет, что пароль чата известен: без него сообщение не зашифровать
+     *
+     * @return true, если отправлять можно, иначе показывает сообщение пользователю
+     */
+    private boolean canSendToChat() {
+        if(hc.chatGroupChats.hasPasswordChat(chatId))return true;
+        runOnUiThread(()->Toast.makeText(this,"Нет пароля чата, отправка невозможна",Toast.LENGTH_SHORT).show());
+        return false;
+    }
+
     private void sendMessageS(String recordMic) {
+        if(!canSendToChat())return;
         long t=System.currentTimeMillis();
         long amsg=-1;
 
@@ -1798,6 +1818,15 @@ public class ChatActivity extends AppCompatActivity {
                 popupWindow.dismiss();
                 HalChatFunctionsLib.setClipboard(this,"HalChat",messageText);
                 Toast.makeText(this,R.string.message_copied,Toast.LENGTH_SHORT).show();
+            });
+        }
+
+        TextView saveFiles=menuView.findViewById(R.id.save_files_message);
+        if(message.attachments!=null&&message.attachments.length()>0) {
+            saveFiles.setVisibility(View.VISIBLE);
+            saveFiles.setOnClickListener(v->{
+                popupWindow.dismiss();
+                saveMessageFiles(message);
             });
         }
 
@@ -2344,7 +2373,31 @@ public class ChatActivity extends AppCompatActivity {
                 stopRecording(true);
             }
 
+        } else if(requestCode==REQUEST_SAVE_FILES_PERMISSION) {
+            HCMessage message=pendingSaveMessage;
+            pendingSaveMessage=null;
+            if(grantResults.length>0&&grantResults[0]==PackageManager.PERMISSION_GRANTED&&message!=null) {
+                messageAdapter.attachments.saveFiles(message);
+            } else {
+                Toast.makeText(this,R.string.file_save_permission,Toast.LENGTH_SHORT).show();
+            }
         }
+    }
+
+    /**
+     * Сохраняет вложения сообщения в Загрузки/HalChat, до Android 10 сначала запрашивает разрешение
+     *
+     * @param message Сообщение с вложениями
+     * @return void
+     */
+    private void saveMessageFiles(HCMessage message) {
+        if(Build.VERSION.SDK_INT<Build.VERSION_CODES.Q
+                &&ContextCompat.checkSelfPermission(this,Manifest.permission.WRITE_EXTERNAL_STORAGE)!=PackageManager.PERMISSION_GRANTED) {
+            pendingSaveMessage=message;
+            ActivityCompat.requestPermissions(this,new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},REQUEST_SAVE_FILES_PERMISSION);
+            return;
+        }
+        messageAdapter.attachments.saveFiles(message);
     }
 
     private void setupPrivateChatUserStatus() {

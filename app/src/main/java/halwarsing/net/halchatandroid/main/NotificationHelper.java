@@ -30,7 +30,19 @@ public class NotificationHelper {
     private static final HashMap<Long, Integer> unreadMessages = new HashMap<>();
     private static final HashMap<Long, HashMap<Long, NotificationCompat.MessagingStyle>> chatMessages = new HashMap<>();
 
-    public static void showNotification(Context context, HCMessage msg, HCChat chat, HNUser user, String iconChat) {
+    /**
+     * Уведомление о сообщении от пользователя
+     *
+     * @param context Контекст приложения
+     * @param msg Сообщение
+     * @param text Текст для уведомления (эмодзи уже заменены)
+     * @param chat Чат сообщения
+     * @param user Отправитель
+     * @param iconChat Путь к иконке чата
+     * @param silent true - без звука и вибрации
+     * @return void
+     */
+    public static void showNotification(Context context, HCMessage msg, String text, HCChat chat, HNUser user, String iconChat, boolean silent) {
         NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
 
         NotificationChannel channel = new NotificationChannel(
@@ -71,7 +83,7 @@ public class NotificationHelper {
         NotificationCompat.MessagingStyle messagingStyle = messages.getOrDefault(msg.msgId,new NotificationCompat.MessagingStyle(sender)
                         .setConversationTitle(user.nickname));
 
-        String message=msg.decryptedMessage;
+        String message=text;
         if(msg.type==2) {
             message="Новый участник";
         } else if(msg.type==3) {
@@ -90,6 +102,7 @@ public class NotificationHelper {
                 .setContentIntent(pendingIntent)
                 .setNumber(messageCount)
                 .setGroup(GROUP_KEY_CHAT+msg.chatId)
+                .setSilent(silent)
                 .setAutoCancel(true);
 
         Bitmap bitmapChat=BitmapFactory.decodeFile(iconChat);
@@ -102,13 +115,25 @@ public class NotificationHelper {
                         .setSummaryText(chat.name+" (" + messageCount+")"))
                 .setGroup(GROUP_KEY_CHAT + msg.chatId)
                 .setGroupSummary(true)
+                .setSilent(silent)
                 .setAutoCancel(true);
 
         manager.notify((int)msg.msgId,chatNotification.build());
         manager.notify((int)msg.chatId,groupSummary.build());
     }
 
-    public static void showChatNotification(Context context, HCMessage msg, HCChat chat, String iconChat) {
+    /**
+     * Уведомление о сообщении канала (от имени чата)
+     *
+     * @param context Контекст приложения
+     * @param msg Сообщение
+     * @param text Текст для уведомления (эмодзи уже заменены)
+     * @param chat Чат сообщения
+     * @param iconChat Путь к иконке чата
+     * @param silent true - без звука и вибрации
+     * @return void
+     */
+    public static void showChatNotification(Context context, HCMessage msg, String text, HCChat chat, String iconChat, boolean silent) {
         NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
 
         NotificationChannel channel = new NotificationChannel(
@@ -149,7 +174,7 @@ public class NotificationHelper {
                 .setConversationTitle(chat.name));
 
 
-        String message=msg.decryptedMessage;
+        String message=text;
         if(msg.type==2) {
             message="Новый участник";
         } else if(msg.type==3) {
@@ -168,6 +193,7 @@ public class NotificationHelper {
                 .setContentIntent(pendingIntent)
                 .setNumber(messageCount)
                 .setGroup(GROUP_KEY_CHAT+msg.chatId)
+                .setSilent(silent)
                 .setAutoCancel(true);
 
         Bitmap bitmapChat=BitmapFactory.decodeFile(iconChat);
@@ -180,6 +206,7 @@ public class NotificationHelper {
                         .setSummaryText(chat.name+" (" + messageCount+")"))
                 .setGroup(GROUP_KEY_CHAT + msg.chatId)
                 .setGroupSummary(true)
+                .setSilent(silent)
                 .setAutoCancel(true);
 
         manager.notify((int)msg.msgId,chatNotification.build());

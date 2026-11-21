@@ -41,6 +41,12 @@
 -keep class halwarsing.net.halchatandroid.halsm.LocalLLMHalSM { *; }
 -keep class halwarsing.net.halchatandroid.halsm.LocalLLMHalSM$* { *; }
 
+# lazysodium вызывает libsodium через JNA по именам методов
+-keep class com.sun.jna.** { *; }
+-keep class * implements com.sun.jna.** { *; }
+-keep class com.goterl.lazysodium.** { *; }
+-dontwarn java.awt.**
+
 -keepclassmembers class halwarsing.net.halchatandroid.plugins.PluginWebUi$Bridge {
     @android.webkit.JavascriptInterface <methods>;
 }

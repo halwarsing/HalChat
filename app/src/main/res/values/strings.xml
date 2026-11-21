@@ -234,6 +234,18 @@
     <string name="delete_msg">Удалить</string>
     <string name="status_msg_sending">…</string>
 
+    <string name="save_to_downloads">Сохранить в Загрузки</string>
+    <string name="file_saved">Сохранено в Загрузки/HalChat</string>
+    <string name="file_save_failed">Не удалось сохранить файл</string>
+    <string name="file_save_permission">Нет разрешения на запись в Загрузки</string>
+    <string name="file_open">Открыть</string>
+    <string name="file_download">Скачать</string>
+    <string name="file_download_failed">Не удалось скачать файл</string>
+    <string name="file_progress">%1$s / %2$s</string>
+    <string name="file_no_app">Нет приложения, чтобы открыть файл</string>
+    <string name="video_play_failed">Не удалось воспроизвести видео</string>
+    <string name="video_play_pause">Воспроизвести / пауза</string>
+
     <string name="hdw_yes">Ок</string>
     <string name="hdw_no">Отмена</string>
 

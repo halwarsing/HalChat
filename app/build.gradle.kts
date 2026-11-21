@@ -11,8 +11,8 @@ android {
         applicationId = "halwarsing.net.halchatandroid"
         minSdk = 26
         targetSdk = 36
-        versionCode = 28
-        versionName = "1.0.4 (AI in every phone)"
+        versionCode = 30
+        versionName = "1.0.5 (Safety is all)"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -86,6 +86,8 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.bcprov.jdk15to18)
     implementation("com.google.android.flexbox:flexbox:3.0.0")
+    implementation("com.goterl:lazysodium-android:5.2.0@aar")
+    implementation("net.java.dev.jna:jna:5.17.0@aar")
     implementation(libs.appcompat)
     implementation(libs.material)
     implementation(libs.activity)

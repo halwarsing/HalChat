@@ -17,7 +17,7 @@
             android:id='@+id/chat_user_icon'
             android:layout_width="50dp"
             android:layout_height="50dp"
-            android:scaleType="fitCenter"
+            android:scaleType="centerCrop"
             android:src="@drawable/testicon" />
     </androidx.cardview.widget.CardView>
     <TextView

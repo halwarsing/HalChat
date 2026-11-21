@@ -14,6 +14,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import halwarsing.net.halchatandroid.type.Emoji;
 import halwarsing.net.halchatandroid.type.EmojiPack;
@@ -25,6 +27,7 @@ import halwarsing.net.halchatandroid.type.PixelsPack;
 //TODO если пак был удалён, проверить и удалить
 public class EmojiPixelSystem {
     private static final String TAG="EPSys";
+    private static final Pattern EMOJI_PATTERN=Pattern.compile("\\[emoji-([0-9]{1,18})\\]");
     private SQLiteDatabase db;
     private HalChat hc;
     private final ConcurrentHashMap<Long,CompletableFuture<Emoji>> pendingEmojiLoads=
@@ -256,6 +259,25 @@ public class EmojiPixelSystem {
 
         newFuture.whenComplete((emoji,error)->pendingEmojiLoads.remove(emojiId,newFuture));
         return newFuture;
+    }
+
+    /**
+     * Заменяет [emoji-N] на текстовое значение эмодзи (value), для мест без картинок: уведомления
+     *
+     * @param text Текст сообщения, может быть null
+     * @return Текст с заменёнными эмодзи, неизвестные эмодзи остаются как есть
+     */
+    public String replaceEmojisToText(String text) {
+        if(text==null||text.isEmpty())return text;
+        Matcher matcher=EMOJI_PATTERN.matcher(text);
+        StringBuffer out=new StringBuffer();
+        while(matcher.find()) {
+            Emoji emoji=getEmojiById(Long.parseLong(matcher.group(1)));
+            String value=emoji==null||emoji.value==null||emoji.value.isEmpty()?matcher.group():emoji.value;
+            matcher.appendReplacement(out,Matcher.quoteReplacement(value));
+        }
+        matcher.appendTail(out);
+        return out.toString();
     }
 
     //Pixels

@@ -1,11 +1,54 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content">
     <ImageView
         android:layout_width="200dp"
         android:layout_height="200dp"
         android:scaleType="fitCenter"
-        android:src="@drawable/testicon"
+        android:src="@drawable/image"
         android:id="@+id/fileicon"/>
-</LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/fileAction"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="center"
+        android:background="@drawable/file_action_background"
+        android:visibility="gone">
+        <com.google.android.material.progressindicator.CircularProgressIndicator
+            android:id="@+id/fileProgress"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:indeterminate="true"
+            android:visibility="gone"
+            app:indicatorSize="44dp"
+            app:trackThickness="3dp"
+            app:indicatorColor="@color/white"
+            app:trackColor="#00000000"/>
+        <ImageView
+            android:id="@+id/fileActionIcon"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_file_download"/>
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/fileStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:layout_margin="6dp"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+        android:background="@drawable/file_status_background"
+        android:textColor="@color/white"
+        android:textSize="12sp"
+        android:maxLines="1"
+        android:visibility="gone"/>
+</FrameLayout>

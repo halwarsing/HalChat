@@ -2,23 +2,18 @@ package halwarsing.net.halchatandroid.main;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
-import android.content.Intent;
 import android.graphics.Rect;
-import android.net.Uri;
 import android.text.method.LinkMovementMethod;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.webkit.MimeTypeMap;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
-import androidx.appcompat.content.res.AppCompatResources;
-import androidx.core.content.FileProvider;
 import androidx.core.text.HtmlCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -27,10 +22,8 @@ import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.google.android.flexbox.FlexboxLayout;
 
 import org.json.JSONArray;
-import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -44,7 +37,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import halwarsing.net.halchatandroid.R;
 import halwarsing.net.halchatandroid.type.HCMessage;
-import halwarsing.net.halchatandroid.type.HDFile;
 import halwarsing.net.halchatandroid.type.MessageReaction;
 import halwarsing.net.halchatandroid.views.RecordedAudioView;
 import halwarsing.net.halchatandroid.views.WaveformView;
@@ -61,6 +53,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     private String password;
     private ChatActivity chatActivity;
     private boolean active=true;
+    protected final MessageAttachments attachments;
 
     private static final int TYPE_SENT=1;
     private static final int TYPE_RECEIVED=2;
@@ -99,6 +92,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         this.chatActivity=chatActivity;
         this.hc=hc;
         this.password=password;
+        this.attachments=new MessageAttachments(chatActivity,hc);
         this.startMessage=new HCMessage(0,0,0,0,chatActivity.chat.created,0,0,"",null,null,null,null,null,false,false,true,-1,
                 true,false,null,0,0,false,-1);
         this.messageList.add(startMessage);
@@ -469,25 +463,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             }
 
             if(message.attachments.length()>0) {
-                for (int i = 0; i < message.attachments.length(); i++) {
-                    try {
-                        String attachmentId = message.attachments.getString(i);
-                        hc.hd.getFileById(attachmentId).thenAccept(file -> {
-                            HDFile hdFile = hc.hd.getHDFileById(attachmentId);
-                            chatActivity.runOnUiThread(() -> {
-                                if (hdFile != null
-                                        && isCurrentBinding(msgv,message,bindingVersion)) {
-                                    bindAttachment(msgv, file, hdFile);
-                                }
-                            });
-                        }).exceptionally(error -> {
-                            Log.e(TAG, "Unable to load attachment " + attachmentId, error);
-                            return null;
-                        });
-                    } catch (JSONException e) {
-                        Log.e(TAG, "MessageAdapter", e);
-                    }
-                }
+                attachments.bind(msgv.attachments,message,()->isCurrentBinding(msgv,message,bindingVersion));
             }
 
             if(message.type==1) {
@@ -519,66 +495,6 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             }
         }));
 
-    }
-
-    private void bindAttachment(MessageViewHolder holder, File file, HDFile hdFile) {
-        View itemFile;
-        ImageView fileIcon;
-        String fileType = hdFile.fileType;
-
-        if ("image".equals(fileType)) {
-            itemFile = LayoutInflater.from(context).inflate(
-                    R.layout.file_image_item,
-                    holder.attachments,
-                    false
-            );
-            fileIcon = itemFile.findViewById(R.id.fileicon);
-
-            if (hdFile.mimeData != null) {
-                int originalWidth = hdFile.mimeData.optInt("width");
-                int originalHeight = hdFile.mimeData.optInt("height");
-
-                if (originalWidth > 0 && originalHeight > 0) {
-                    int maxWidthPx = (int) (250 * context.getResources().getDisplayMetrics().density);
-                    float aspectRatio = (float) originalHeight / originalWidth;
-                    int targetWidth = Math.min(originalWidth, maxWidthPx);
-                    int targetHeight = (int) (targetWidth * aspectRatio);
-
-                    ViewGroup.LayoutParams params = fileIcon.getLayoutParams();
-                    if (params == null) {
-                        params = new ViewGroup.LayoutParams(targetWidth, targetHeight);
-                    } else {
-                        params.width = targetWidth;
-                        params.height = targetHeight;
-                    }
-                    fileIcon.setLayoutParams(params);
-                }
-            }
-
-            Glide.with(holder.itemView)
-                    .asDrawable()
-                    .load(file)
-                    .diskCacheStrategy(DiskCacheStrategy.ALL)
-                    .skipMemoryCache(false)
-                    .placeholder(R.drawable.image)
-                    .error(R.drawable.image)
-                    .into(fileIcon);
-        } else {
-            itemFile = LayoutInflater.from(context).inflate(
-                    R.layout.file_item,
-                    holder.attachments,
-                    false
-            );
-            fileIcon = itemFile.findViewById(R.id.fileicon);
-            fileIcon.setImageDrawable(
-                    AppCompatResources.getDrawable(context, hc.hd.getFileIcon(fileType))
-            );
-            TextView fileName = itemFile.findViewById(R.id.filename);
-            fileName.setText(hdFile.name);
-        }
-
-        itemFile.setOnClickListener(v -> openFile(hdFile.id, hdFile.name));
-        holder.attachments.addView(itemFile);
     }
 
     private void bindPoll(MessageViewHolder holder,HCMessage message) {
@@ -666,34 +582,6 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             });
         }
         holder.messageReactionsDiv.setVisibility(View.VISIBLE);
-    }
-
-    private void openFile(String id,String name) {
-        hc.hd.getFileById(id).thenAccept(file->{
-            String mimeType = getMimeType(name);
-            if (mimeType == null) {
-                mimeType = "*/*";
-            }
-            Uri fileUri;
-            fileUri = FileProvider.getUriForFile(context,
-                    context.getPackageName() + ".provider", file);
-
-            Intent intent = new Intent(Intent.ACTION_VIEW);
-            intent.setDataAndType(fileUri, mimeType);
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-
-            context.startActivity(Intent.createChooser(intent, "Открыть файл с помощью"));
-        });
-    }
-
-    private static String getMimeType(String name) {
-        int lastDotIndex = name.lastIndexOf('.');
-        if (lastDotIndex != -1 && lastDotIndex < name.length() - 1) {
-            String extension = name.substring(lastDotIndex + 1).toLowerCase();
-            return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension);
-        }
-
-        return null;
     }
 
     @Override

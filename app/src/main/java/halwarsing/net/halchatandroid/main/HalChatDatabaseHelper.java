@@ -9,7 +9,7 @@ import android.util.Log;
 //Инициализация sql баз данных, создание новых и обновление старых
 public class HalChatDatabaseHelper extends SQLiteOpenHelper {
     private static final String DATABASE_NAME = "halchat.db";
-    private static final int DATABASE_VERSION = 19;
+    private static final int DATABASE_VERSION = 20;
     private static final String TAG = "HCDBC";
     SQLiteDatabase db;
     String[] UIDNames=new String[]{"msg","chats","chatUsers","chatActions","actions"};
@@ -131,6 +131,9 @@ public class HalChatDatabaseHelper extends SQLiteOpenHelper {
             //HC AI Update
             createCacheAI(db);
             createHCPlugins(db);
+
+            //HD File Size Update
+            addSizeHD(db);
 
             Log.d(TAG,"Database tables created");
         } catch (Exception e) {
@@ -329,6 +332,11 @@ public class HalChatDatabaseHelper extends SQLiteOpenHelper {
                 "ON groupChatsMessagesSelectedReaction(fromId, chatId, msgId);");
     }
 
+    //Размер файла из getInfo (байты), -1 - неизвестен
+    private void addSizeHD(SQLiteDatabase rdb) {
+        rdb.execSQL("ALTER TABLE `files` ADD COLUMN `size` BIGINT(21) NOT NULL DEFAULT -1;");
+    }
+
     private void updateMimeData(SQLiteDatabase rdb) {
         rdb.execSQL("ALTER TABLE `files` RENAME COLUMN `imageData` TO `mimeData`;");
     }
@@ -469,6 +477,9 @@ public class HalChatDatabaseHelper extends SQLiteOpenHelper {
             if(oldVersion<19) {
                 createCacheAI(db);
                 createHCPlugins(db);
+            }
+            if(oldVersion<20) {
+                addSizeHD(db);
             }
         } catch (Exception e) {
             Log.e(TAG,"Error upgrading",e);
