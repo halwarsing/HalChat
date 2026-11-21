@@ -10,8 +10,9 @@ public class HDFile {
     public boolean isFolder;
     public String mimeType,fileType;
     public JSONObject mimeData;
+    public long size; // байты из getInfo, -1 - неизвестен
 
-    public HDFile(long uid,String id,String path,String name,long fromId,long updated,boolean isFolder,String mimeType,String fileType,String mimeData) throws JSONException {
+    public HDFile(long uid,String id,String path,String name,long fromId,long updated,boolean isFolder,String mimeType,String fileType,String mimeData,long size) throws JSONException {
         this.uid=uid;
         this.id=id;
         this.path=path;
@@ -22,5 +23,6 @@ public class HDFile {
         this.mimeType=mimeType;
         this.fileType=fileType;
         this.mimeData=mimeData!=null&&mimeData.startsWith("{")&&mimeData.endsWith("}")?new JSONObject(mimeData):null;
+        this.size=size;
     }
 }

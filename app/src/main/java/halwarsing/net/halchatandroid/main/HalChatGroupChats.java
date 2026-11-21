@@ -38,6 +38,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import halwarsing.net.halchatandroid.encryption.AESGCMHelper;
+import halwarsing.net.halchatandroid.encryption.HalChatCipher;
 import halwarsing.net.halchatandroid.type.AILoRA;
 import halwarsing.net.halchatandroid.type.AIModel;
 import halwarsing.net.halchatandroid.type.ChatPlugin;
@@ -840,7 +841,7 @@ public class HalChatGroupChats {
                         //TODO FIX LOAD MESSAGES
                         HCMessage lmsg=getLastMessage(chat);
                         long lastMessageId=lmsg==null?-1:lmsg.msgId;
-                        syncChatNewMessagesAsync(chat,lastMessageId);
+                        syncChatNewMessagesAsync(chat,lastMessageId,lmsg!=null);
                     } catch (Exception e) {
                         Log.e(TAG,"loadMessages",e);
                     }
@@ -1298,7 +1299,7 @@ public class HalChatGroupChats {
                         //TODO FIX LOAD MESSAGES
                         HCMessage lmsg=getLastMessage(chat);
                         long lastMessageId=lmsg==null?-1:lmsg.msgId;
-                        syncChatNewMessagesAsync(chat,lastMessageId);
+                        syncChatNewMessagesAsync(chat,lastMessageId,lmsg!=null);
                     } catch (Exception e) {
                         Log.e(TAG,"loadMessages",e);
                     }
@@ -1309,7 +1310,15 @@ public class HalChatGroupChats {
         });
     }
 
-    private void syncChatNewMessagesAsync(HCChat chat, long lastMessageId) throws JSONException {
+    /**
+     * Догружает с сервера сообщения чата после lastMessageId (по 100 за запрос)
+     *
+     * @param chat Чат
+     * @param lastMessageId Последнее сообщение в БД, -1 если сообщений нет
+     * @param isNotify true - показывать уведомления о догруженных сообщениях (false при первой загрузке чата, чтобы не уведомлять о всей истории)
+     * @return void
+     */
+    private void syncChatNewMessagesAsync(HCChat chat, long lastMessageId, boolean isNotify) throws JSONException {
         JSONObject postData = new JSONObject();
         postData.put("chatId", chat.chatUID);
         postData.put("limit", 100);
@@ -1321,7 +1330,7 @@ public class HalChatGroupChats {
                 if (res.getInt("errorCode") == 0) {
                     JSONArray msgs = res.getJSONArray("messages");
 
-                    insertMessagesBatch(msgs,chat,true);
+                    insertMessagesBatch(msgs,chat,true,isNotify);
 
                     if (msgs.length() == 100) {
                         long newLastId = lastMessageId;
@@ -1329,7 +1338,7 @@ public class HalChatGroupChats {
                             newLastId = Math.max(newLastId, msgs.getJSONObject(i).getLong("uid"));
                         }
                         if (newLastId > lastMessageId) {
-                            syncChatNewMessagesAsync(chat, newLastId);
+                            syncChatNewMessagesAsync(chat, newLastId, isNotify);
                         }
                     }
                 }
@@ -1339,7 +1348,16 @@ public class HalChatGroupChats {
         });
     }
 
-    protected void insertMessagesBatch(JSONArray msgs, HCChat chat,boolean isNew) {
+    /**
+     * Сохраняет пачку сообщений с сервера одной транзакцией, новые передаёт дальше
+     *
+     * @param msgs Сообщения в JSON с сервера
+     * @param chat Чат
+     * @param isNew true - передать вставленные сообщения открытому чату
+     * @param isNotify true - передать через hc.dispatchNewMessage (список чатов и уведомления), иначе только открытому чату
+     * @return void
+     */
+    protected void insertMessagesBatch(JSONArray msgs, HCChat chat,boolean isNew,boolean isNotify) {
         List<HCMessage> insertedMessages=new ArrayList<>();
         boolean committed=false;
         synchronized(this) {
@@ -1361,9 +1379,18 @@ public class HalChatGroupChats {
             }
         }
 
-        if(committed && isNew && hc.chatInterface!=null) {
-            for(HCMessage message : insertedMessages) {
-                hc.chatInterface.onNewMessage(message);
+        if(!committed||!isNew)return;
+        for(int i=0;i<insertedMessages.size();i++) {
+            HCMessage message=insertedMessages.get(i);
+            try {
+                //Звук только у последнего, чтобы пачка пропущенных сообщений не звенела много раз подряд
+                if(isNotify) {
+                    hc.dispatchNewMessage(message,i<insertedMessages.size()-1);
+                } else if(hc.chatInterface!=null) {
+                    hc.chatInterface.onNewMessage(message);
+                }
+            } catch (Exception e) {
+                Log.e(TAG,"insertMessagesBatch dispatch",e);
             }
         }
     }
@@ -1869,18 +1896,21 @@ public class HalChatGroupChats {
 
     protected CompletableFuture<Boolean> sendEditMessage(HCMessage msg) {
         if(msg.isDelete){deleteMessageById(msg.msgId);return CompletableFuture.completedFuture(false);}
+        if(!hasPasswordChat(msg.chatId)){Log.e(TAG,"Нет пароля чата "+msg.chatId+", редактирование заблокировано");return CompletableFuture.completedFuture(false);}
 
         CompletableFuture<Boolean> future=new CompletableFuture<>();
         try {
             String encryptId = generateEncryptId(System.currentTimeMillis(), msg.chatId);
             msg.encryptId = HalChatFunctionsLib.hexStringToByteArray(encryptId);
-            msg.message = encryptMessage(msg.decryptedMessage, getPasswordChat(msg.chatId), msg.encryptId);
+            msg.message = encryptMessage(msg.decryptedMessage, getPasswordChat(msg.chatId), msg.chatId, msg.encryptId);
+            msg.v=HalChatCipher.VER_MSG;
             try {
                 JSONObject postData=new JSONObject();
                 postData.put("msgId",msg.msgId);
                 postData.put("message",msg.message);
                 postData.put("attachments",msg.attachments.toString());
                 postData.put("encryptId",encryptId);
+                postData.put("v",msg.v);
                 postData.put("chatId",msg.chatId);
                 postData.put("soundMsg",-1);
                 if(!msg.recordMic.equals("-1")) {
@@ -1925,11 +1955,11 @@ public class HalChatGroupChats {
                 db.beginTransaction();
             }
             try {
-                db.execSQL("UPDATE `groupChatsMessages` SET `message`=?, `encryptId`=?, `attachments`=?, `time`=?, `answerMsg`=?, `commentMsg`=?, `type`=?, `soundMsg`=?, `recordMic`=?, `isSended`=?, `isReceived`=?, `isHalEnc`=?, `isPinned`=?, `data`=? WHERE `msgId`=? AND `isDelete`=0",new String[]{
+                db.execSQL("UPDATE `groupChatsMessages` SET `message`=?, `encryptId`=?, `attachments`=?, `time`=?, `answerMsg`=?, `commentMsg`=?, `type`=?, `soundMsg`=?, `recordMic`=?, `isSended`=?, `isReceived`=?, `isHalEnc`=?, `isPinned`=?, `data`=?, `v`=? WHERE `msgId`=? AND `isDelete`=0",new String[]{
                         message.message, HalChatFunctionsLib.bytesToHex(message.encryptId), message.attachments.toString(), String.valueOf(message.time), String.valueOf(message.answerMsg), String.valueOf(message.commentMsg),
                         String.valueOf(message.type), message.soundMsg, message.recordMic,message.isSended?"1":"0",message.isReceived?"1":"0",
                         message.isHalEnc?"1":"0", message.isPinned?"1":"0",
-                        message.data==null?null:message.data.toString(),String.valueOf(message.msgId)
+                        message.data==null?null:message.data.toString(),String.valueOf(message.v),String.valueOf(message.msgId)
                 });
                 storeMessageReactions(message);
                 if(ownsTransaction) {
@@ -1963,13 +1993,7 @@ public class HalChatGroupChats {
             if(!lastChatIds.containsKey(msg.chatId)||msg.msgId>lastChatIds.get(msg.chatId)) {
                 lastChatIds.put(msg.chatId,msg.msgId);
             }
-            if(msg.attachments.length()>0) {
-                int i;
-                for(i=0;i<msg.attachments.length();i++) {
-                    hc.hd.addHalDriveFile(msg.attachments.getString(i));
-                }
-            }
-            if(!msg.recordMic.equals("-1"))hc.hd.addHalDriveFile((msg.recordMic));
+            //Вложения и голосовые не скачиваются заранее: только при показе в чате или по нажатию (MessageAdapter)
             String password=getPasswordChat(msg.chatId);
             if(password!=null) {
                 deencryptMessage(msg,password);
@@ -2043,20 +2067,6 @@ public class HalChatGroupChats {
         v=msgCur.getLong(msgCur.getColumnIndex("v"));
         isPinned=msgCur.getInt(msgCur.getColumnIndex("isPinned"))==1;
 
-        if(attachments.length()>0) {
-            int i;
-            for(i=0;i<attachments.length();i++) {
-                try {
-                    String fileId = attachments.getString(i);
-                    if (!hc.hd.isFileExists(fileId)) {
-                        hc.hd.addHalDriveFile(fileId);
-                    }
-                } catch(JSONException e) {
-                    Log.e(TAG,"getMessageFromCursor",e);
-                }
-            }
-        }
-        if(!recordMic.equals("-1")){hc.hd.addHalDriveFile(recordMic);}
         HCMessage result=new HCMessage(uid,msgId,chatId,fromId,time,answerMsg,commentMsg,message,attachments,soundMsg,dataBot,recordMic,encryptId,isDelete,isSended,isReceived,type,userId==fromId,isHalEnc,
                 data,0,pixelId,isPinned,v);
         loadMessageReactions(result,userId);
@@ -2232,7 +2242,7 @@ public class HalChatGroupChats {
         String password=getPasswordChat(chatId);
         int failedMessages=0;
         Cursor cursor=db.rawQuery(
-                "SELECT `msgId`,`message`,`encryptId`,`isHalEnc` "
+                "SELECT `msgId`,`fromId`,`message`,`encryptId`,`isHalEnc`,`v` "
                         +"FROM `groupChatsMessages` "
                         +"WHERE `chatId`=? AND `commentMsg`=? AND `isDelete`=0 "
                         +"ORDER BY `msgId` DESC",
@@ -2244,6 +2254,8 @@ public class HalChatGroupChats {
             int messageColumn=cursor.getColumnIndexOrThrow("message");
             int encryptIdColumn=cursor.getColumnIndexOrThrow("encryptId");
             int isHalEncColumn=cursor.getColumnIndexOrThrow("isHalEnc");
+            int fromIdColumn=cursor.getColumnIndexOrThrow("fromId");
+            int vColumn=cursor.getColumnIndexOrThrow("v");
 
             while(cursor.moveToNext()) {
                 if(Thread.currentThread().isInterrupted()) {
@@ -2257,6 +2269,8 @@ public class HalChatGroupChats {
                             cursor.getString(encryptIdColumn),
                             cursor.getInt(isHalEncColumn)==1,
                             chatId,
+                            cursor.getLong(fromIdColumn),
+                            cursor.getLong(vColumn),
                             password
                     );
                     batch.put(msgId,MessageSearch.normalizeText(text));
@@ -2288,15 +2302,35 @@ public class HalChatGroupChats {
         batch.clear();
     }
 
-    private String decryptStoredMessageText(String storedMessage, String encryptIdHex, boolean isHalEnc, long chatId, String password) throws Exception {
+    /**
+     * Расшифровывает текст сообщения из БД для поискового индекса
+     *
+     * @param storedMessage Сообщение из БД (AES-GCM hex, HalEncryption hex или base64 v>=2)
+     * @param encryptIdHex encryptId сообщения (hex)
+     * @param isHalEnc Сообщение зашифровано паролем чата (не локальным AES-GCM)
+     * @param chatId UID чата
+     * @param fromId ID отправителя
+     * @param v Версия шифрования сообщения
+     * @param password Пароль чата
+     * @return Текст сообщения
+     * @throws Exception Если расшифровать не удалось
+     */
+    private String decryptStoredMessageText(String storedMessage, String encryptIdHex, boolean isHalEnc, long chatId, long fromId, long v, String password) throws Exception {
         if(storedMessage==null || storedMessage.isEmpty() || password==null) {
             return storedMessage;
         }
 
-        byte[] encryptedMessage=HalChatFunctionsLib.hexStringToByteArray(storedMessage);
         byte[] encryptId=encryptIdHex==null
                 ? new byte[0]
                 : HalChatFunctionsLib.hexStringToByteArray(encryptIdHex);
+
+        if(isHalEnc&&v>=HalChatCipher.VER_MSG) {
+            String text=HalChatCipher.decrypt(storedMessage,password,chatId,v,fromId,HalChatFunctionsLib.bytesToHex(encryptId));
+            if(text==null)throw new IllegalArgumentException("Unable to decrypt message");
+            return text;
+        }
+
+        byte[] encryptedMessage=HalChatFunctionsLib.hexStringToByteArray(storedMessage);
 
         if(!isHalEnc) {
             return AESGCMHelper.decrypt(encryptedMessage,chatId);
@@ -2415,7 +2449,16 @@ public class HalChatGroupChats {
         return new LocalMessageDecryption(decryptedText,decryptedLayers,false);
     }
 
+    /**
+     * Расшифровывает текст сообщения, зашифрованный паролем чата (HalEncryption для v<2, XChaCha20 для v>=2)
+     *
+     * @param encryptedMessage Зашифрованный текст
+     * @param msg Сообщение (chatId, fromId, encryptId, v)
+     * @param password Пароль чата
+     * @return Текст или null, если расшифровать не удалось
+     */
     private String tryDecryptHalMessage(String encryptedMessage,HCMessage msg,String password) {
+        if(msg.v>=HalChatCipher.VER_MSG)return HalChatCipher.decrypt(encryptedMessage,password,msg.chatId,msg.v,msg.fromId,HalChatFunctionsLib.bytesToHex(msg.encryptId));
         if(!isHexString(encryptedMessage))return null;
         try {
             String decryptedMessage=new String(
@@ -2457,8 +2500,9 @@ public class HalChatGroupChats {
             JSONArray newVariants=new JSONArray();
             List<String> decryptedVariants=new ArrayList<>();
             boolean isPlainVariants=false;
+            boolean isStoredEncrypted=isHalEncrypted&&msg.v>=HalChatCipher.VER_MSG; // v>=2 в БД остаётся зашифрованным, варианты в data не подменяем
 
-            for(int i=0;i<oldVariants.length();i++) {
+            for(int i=0;!isStoredEncrypted&&i<oldVariants.length();i++) {
                 if(!isHexString(oldVariants.getString(i))) {
                     isPlainVariants=true;
                     break;
@@ -2476,7 +2520,7 @@ public class HalChatGroupChats {
                 decryptedVariants.add(decryptedVariant);
             }
 
-            msg.data.put("variants",newVariants);
+            if(!isStoredEncrypted)msg.data.put("variants",newVariants);
             msg.setPollVariants(decryptedVariants);
         } catch(Exception e) {
             Log.e(TAG,"Failed to decrypt poll:",e);
@@ -2516,7 +2560,16 @@ public class HalChatGroupChats {
         return decryptedVariant;
     }
 
+    /**
+     * Расшифровывает вариант опроса, зашифрованный паролем чата (HalEncryption для v<2, XChaCha20 для v>=2)
+     *
+     * @param variant Зашифрованный вариант
+     * @param msg Сообщение опроса (chatId, fromId, encryptId, v)
+     * @param password Пароль чата
+     * @return Текст варианта или null, если расшифровать не удалось
+     */
     private String tryDecryptHalPollVariant(String variant,HCMessage msg,String password) {
+        if(msg.v>=HalChatCipher.VER_MSG)return HalChatCipher.decrypt(variant,password,msg.chatId,msg.v,msg.fromId,HalChatFunctionsLib.bytesToHex(msg.encryptId));
         if(!isHexString(variant))return null;
         try {
             String decryptedVariant=new String(
@@ -2548,14 +2601,17 @@ public class HalChatGroupChats {
         return true;
     }
 
-    protected String encryptMessage(String msg,String password,byte[] encryptId) {
-        if(msg=="")return "";
-        byte[] enc=hc.he.encodeByHash(msg.getBytes(StandardCharsets.UTF_8),password+HalChatFunctionsLib.bytesToHex(encryptId),10,100000,"");
-        StringBuilder out=new StringBuilder();
-        for(int i=0;i<enc.length;i++) {
-            out.append(String.format("%02x", enc[i]));
-        }
-        return out.toString();
+    /**
+     * Шифрует текст для отправки на сервер текущей версией HalChatCipher.VER_MSG
+     *
+     * @param msg Текст сообщения или варианта опроса
+     * @param password Пароль чата
+     * @param chatId UID чата
+     * @param encryptId encryptId сообщения
+     * @return base64 шифротекст
+     */
+    protected String encryptMessage(String msg,String password,long chatId,byte[] encryptId) {
+        return HalChatCipher.encrypt(msg,password,chatId,hc.idUser,HalChatFunctionsLib.bytesToHex(encryptId));
     }
 
     //Load group chats users from network
@@ -2711,6 +2767,7 @@ public class HalChatGroupChats {
     }
 
     protected CompletableFuture<JSONObject> sendMessage(HCMessage msg, List<String> variants) {
+        if(!hasPasswordChat(msg.chatId)){Log.e(TAG,"Нет пароля чата "+msg.chatId+", отправка заблокирована");return CompletableFuture.completedFuture(null);}
         prepareMessageForSend(msg);
         String encryptId=HalChatFunctionsLib.bytesToHex(msg.encryptId);
 
@@ -2721,7 +2778,7 @@ public class HalChatGroupChats {
                 variantsJSON = new JSONArray();
 
                 for (String vr : variants) {
-                    variantsJSON.put(encryptMessage(vr, getPasswordChat(msg.chatId), msg.encryptId));
+                    variantsJSON.put(encryptMessage(vr, getPasswordChat(msg.chatId), msg.chatId, msg.encryptId));
                 }
 
                 if(msg.data==null)msg.data=new JSONObject();
@@ -2740,6 +2797,7 @@ public class HalChatGroupChats {
                 JSONObject postData = new JSONObject();
                 postData.put("message", msg.message);
                 postData.put("encryptId", encryptId);
+                postData.put("v", msg.v);
                 postData.put("chatId", msg.chatId);
                 postData.put("variants",variantsJSON);
 
@@ -2757,6 +2815,7 @@ public class HalChatGroupChats {
             postData.put("message",msg.message);
             postData.put("attachments",msg.attachments.toString());
             postData.put("encryptId",encryptId);
+            postData.put("v",msg.v);
             postData.put("chatId",msg.chatId);
             postData.put("commentMsg",msg.commentMsg);
             postData.put("soundMsg",-1);
@@ -2783,6 +2842,7 @@ public class HalChatGroupChats {
     }
 
     protected void addToSendMessage(HCMessage msg) {
+        if(!hasPasswordChat(msg.chatId)){Log.e(TAG,"Нет пароля чата "+msg.chatId+", в очередь не добавлено");return;}
         prepareMessageForSend(msg);
         String encryptId=HalChatFunctionsLib.bytesToHex(msg.encryptId);
 
@@ -2815,7 +2875,8 @@ public class HalChatGroupChats {
         if(msg.isHalEnc)return;
         String encryptId=generateEncryptId(System.currentTimeMillis(),msg.chatId);
         msg.encryptId=HalChatFunctionsLib.hexStringToByteArray(encryptId);
-        msg.message=encryptMessage(msg.decryptedMessage,getPasswordChat(msg.chatId),msg.encryptId);
+        msg.message=encryptMessage(msg.decryptedMessage,getPasswordChat(msg.chatId),msg.chatId,msg.encryptId);
+        msg.v=HalChatCipher.VER_MSG;
         msg.isHalEnc=true;
     }
 
@@ -2885,8 +2946,7 @@ public class HalChatGroupChats {
                                     data.getString("name")
                             );
 
-                            hc.hd.addLocalFile(data.getString("path"),data.getString("name"),hc.idUser,data.getLong("updated"),file,data.getString("id"),
-                                    data.getString("mimeType"),data.getString("fileType"),data.getString("mimeData"));
+                            hc.hd.addUploadedFile(data.getString("id"),file);
 
                             if (fileUploadEvent != null) {
                                 fileUploadEvent.onUpload(hcf, uidf);
@@ -2930,10 +2990,19 @@ public class HalChatGroupChats {
         this.fileUploadEvent=fileUploadEvent;
     }
 
+    /**
+     * Расшифровывает сообщение, зашифрованное паролем чата. v<2 (HalEncryption) перешифровывается в локальный AES-GCM,
+     * v>=2 хранится в БД как пришло с сервера и только расшифровывается
+     *
+     * @param msg Сообщение
+     * @param password Пароль чата, может быть null
+     * @return Это же сообщение (расшифрованное, если удалось)
+     */
     protected HCMessage deencryptMessage(HCMessage msg,String password) {
         if(password==null)return msg;
         if(!msg.isHalEnc){
             return msg;}
+        if(msg.v>=HalChatCipher.VER_MSG)return decryptMessage(msg,password);
         if(msg.message.isEmpty()){
             boolean hasPoll=msg.type==4&&msg.data!=null&&msg.data.has("variants");
             if(hasPoll) {

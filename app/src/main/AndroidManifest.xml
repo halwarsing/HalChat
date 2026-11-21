@@ -87,11 +87,6 @@
             android:name=".main.SettingsAppActivity"
             android:exported="false" />
         <activity
-            android:name=".localai.LocalAiTestActivity"
-            android:exported="false"
-            android:screenOrientation="unspecified"
-            android:theme="@style/AppTheme" />
-        <activity
             android:name=".main.ChangeAvatarActivity"
             android:exported="false" />
         <activity
@@ -111,6 +106,10 @@
             android:exported="false"
             android:theme="@style/AppTheme"
             android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name=".main.VideoPlayerActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme" />
         <activity
             android:name=".main.CreatePasswordChatActivity"
             android:exported="false"
@@ -183,6 +182,13 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <provider
+            android:name=".main.HalDriveFileProvider"
+            android:authorities="${applicationId}.halDriveFiles"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
     </application>
 
 </manifest>

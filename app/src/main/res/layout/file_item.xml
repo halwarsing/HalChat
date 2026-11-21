@@ -1,16 +1,49 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:orientation="vertical"
     android:layout_width="96dp"
-    android:layout_height="120dp"
+    android:layout_height="wrap_content"
+    android:minHeight="120dp"
+    android:paddingBottom="4dp"
     android:background="@color/accientBackground">
-    <ImageView
+    <FrameLayout
         android:layout_width="80dp"
         android:layout_height="80dp"
         android:layout_marginStart="8dp"
-        android:layout_marginTop="8dp"
-        android:src="@drawable/unknown_file"
-        android:id="@+id/fileicon"/>
+        android:layout_marginTop="8dp">
+        <ImageView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:src="@drawable/unknown_file"
+            android:id="@+id/fileicon"/>
+
+        <FrameLayout
+            android:id="@+id/fileAction"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_gravity="center"
+            android:background="@drawable/file_action_background"
+            android:visibility="gone">
+            <com.google.android.material.progressindicator.CircularProgressIndicator
+                android:id="@+id/fileProgress"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:indeterminate="true"
+                android:visibility="gone"
+                app:indicatorSize="40dp"
+                app:trackThickness="3dp"
+                app:indicatorColor="@color/white"
+                app:trackColor="#00000000"/>
+            <ImageView
+                android:id="@+id/fileActionIcon"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_file_download"/>
+        </FrameLayout>
+    </FrameLayout>
 
     <TextView
         android:layout_width="88dp"
@@ -23,5 +56,17 @@
         android:maxLines="1"
         android:ellipsize="end"
         android:id="@+id/filename"/>
+
+    <TextView
+        android:id="@+id/fileStatus"
+        android:layout_width="88dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="4dp"
+        android:gravity="center"
+        android:textSize="11sp"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:alpha="0.7"
+        android:visibility="gone"/>
 
 </LinearLayout>

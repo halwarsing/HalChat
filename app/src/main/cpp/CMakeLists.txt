@@ -75,6 +75,18 @@ target_include_directories(hal_halsm PRIVATE "${HALSM_INCLUDE}")
 target_compile_options(hal_halsm PRIVATE -Wall -Wextra -Wno-unused-parameter)
 target_link_libraries(hal_halsm android log dl m)
 
+set(HALCHATCORE_SRC "${CMAKE_CURRENT_LIST_DIR}/HalChatCore")
+
+# HalChatCore - общее ядро клиентов HalChat (Android, Linux, iOS, Windows), без HalSM
+add_library(hal_chatcore SHARED
+        "${HALCHATCORE_SRC}/halchatcore_jni.c"
+        "${HALCHATCORE_SRC}/HalHash.c")
+
+target_include_directories(hal_chatcore PRIVATE "${HALCHATCORE_SRC}")
+# -O2 и в Debug: хэш паролей и ключей шифрования должен быть быстрым всегда
+target_compile_options(hal_chatcore PRIVATE -O2 -Wall -Wextra -Wno-unused-parameter)
+target_link_libraries(hal_chatcore m)
+
 target_compile_definitions(hal_llama PRIVATE
         GGML_SYSTEM_ARCH=${GGML_SYSTEM_ARCH}
         GGML_CPU_KLEIDIAI=$<BOOL:${GGML_CPU_KLEIDIAI}>

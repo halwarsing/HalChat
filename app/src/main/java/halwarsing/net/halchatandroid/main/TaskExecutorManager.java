@@ -7,6 +7,8 @@ public class TaskExecutorManager {
 
     private static final int CORE_POOL_SIZE = Math.max(2, Runtime.getRuntime().availableProcessors());
     private static final int DOWNLOAD_THREADS = 4;
+    //Вложения чатов (большие файлы), отдельно от аватарок и эмодзи
+    private static final int FILE_DOWNLOAD_THREADS = 2;
     private static final int DECRYPT_THREADS = 2;
     private static final int AUDIO_THREADS = 2;
     //transferring passwords between users
@@ -31,6 +33,7 @@ public class TaskExecutorManager {
     private static final int DECRYPT_CHATACTIVITY_THREADS = CORE_POOL_SIZE;
 
     private final ThreadPoolExecutor downloadExecutor;
+    private final ThreadPoolExecutor fileDownloadExecutor;
     private final ThreadPoolExecutor decryptExecutor;
     private final ThreadPoolExecutor audioExecutor;
     private final ThreadPoolExecutor passwordTExecutor;
@@ -50,6 +53,7 @@ public class TaskExecutorManager {
 
     private TaskExecutorManager() {
         downloadExecutor = createExecutor(DOWNLOAD_THREADS);
+        fileDownloadExecutor = createExecutor(FILE_DOWNLOAD_THREADS);
         decryptExecutor = createExecutor(DECRYPT_THREADS);
         audioExecutor = createExecutor(AUDIO_THREADS);
         passwordTExecutor=createExecutor(PASSWORD_T_THREADS);
@@ -80,6 +84,17 @@ public class TaskExecutorManager {
 
     public <T> CompletableFuture<T> submitDownload(String tag, Callable<T> task) {
         return submitCompletableTask(downloadExecutor, tag, task);
+    }
+
+    /**
+     * Скачивание вложения чата в отдельном пуле
+     *
+     * @param tag Уникальный тег задачи
+     * @param task Задача
+     * @return Future с результатом, одна задача на тег
+     */
+    public <T> CompletableFuture<T> submitFileDownload(String tag, Callable<T> task) {
+        return submitCompletableTask(fileDownloadExecutor, tag, task);
     }
 
     public <T> Future<T> submitUpload(String tag, Callable<T> task) {
@@ -276,6 +291,7 @@ public class TaskExecutorManager {
     // Полная остановка всех потоков
     public void shutdownAll() {
         downloadExecutor.shutdownNow();
+        fileDownloadExecutor.shutdownNow();
         decryptExecutor.shutdownNow();
         audioExecutor.shutdownNow();
         passwordTExecutor.shutdownNow();

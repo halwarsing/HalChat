@@ -51,7 +51,7 @@
                     android:id='@+id/toolbar_chat_icon'
                     android:layout_width="40dp"
                     android:layout_height="40dp"
-                    android:scaleType="fitCenter"
+                    android:scaleType="centerCrop"
                     android:src="@drawable/testicon" />
             </androidx.cardview.widget.CardView>
             <LinearLayout
