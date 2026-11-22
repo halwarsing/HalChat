@@ -278,8 +278,6 @@ public class ChatActivity extends AppCompatActivity {
         chatId=getIntent().getLongExtra("uid",-1);
         commentId=getIntent().getLongExtra("commentId",-1);
 
-        hc.chatGroupChats.setSendMessageEvent(msg -> Log.e(TAG,"Test: "+msg.msgId));
-
         NotificationHelper.clearChatNotifications(this,chatId);
 
         //Variables
