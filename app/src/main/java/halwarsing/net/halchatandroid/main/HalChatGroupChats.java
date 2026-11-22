@@ -7,6 +7,7 @@ import android.app.Activity;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteStatement;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -24,6 +25,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -586,7 +588,7 @@ public class HalChatGroupChats {
                             sendCur.getString(sendCur.getColumnIndexOrThrow("soundMsg")),
                             sendCur.getString(sendCur.getColumnIndexOrThrow("dataBot")),
                             sendCur.getString(sendCur.getColumnIndexOrThrow("recordMic")),
-                            HalChatFunctionsLib.hexStringToByteArray(sendCur.getString(sendCur.getColumnIndexOrThrow("encryptId"))),
+                            getEncryptIdFromCursor(sendCur,sendCur.getColumnIndexOrThrow("encryptId")),
                             false,false,false,sendCur.getInt(sendCur.getColumnIndexOrThrow("type")),true,true,
                             mdata,sendCur.getLong(sendCur.getColumnIndexOrThrow("shareId")),
                             sendCur.getLong(sendCur.getColumnIndexOrThrow("pixelId")),false,
@@ -1955,8 +1957,8 @@ public class HalChatGroupChats {
                 db.beginTransaction();
             }
             try {
-                db.execSQL("UPDATE `groupChatsMessages` SET `message`=?, `encryptId`=?, `attachments`=?, `time`=?, `answerMsg`=?, `commentMsg`=?, `type`=?, `soundMsg`=?, `recordMic`=?, `isSended`=?, `isReceived`=?, `isHalEnc`=?, `isPinned`=?, `data`=?, `v`=? WHERE `msgId`=? AND `isDelete`=0",new String[]{
-                        message.message, HalChatFunctionsLib.bytesToHex(message.encryptId), message.attachments.toString(), String.valueOf(message.time), String.valueOf(message.answerMsg), String.valueOf(message.commentMsg),
+                db.execSQL("UPDATE `groupChatsMessages` SET `message`=?, `encryptId`=?, `attachments`=?, `time`=?, `answerMsg`=?, `commentMsg`=?, `type`=?, `soundMsg`=?, `recordMic`=?, `isSended`=?, `isReceived`=?, `isHalEnc`=?, `isPinned`=?, `data`=?, `v`=? WHERE `msgId`=? AND `isDelete`=0",new Object[]{
+                        message.message, message.encryptId, message.attachments.toString(), String.valueOf(message.time), String.valueOf(message.answerMsg), String.valueOf(message.commentMsg),
                         String.valueOf(message.type), message.soundMsg, message.recordMic,message.isSended?"1":"0",message.isReceived?"1":"0",
                         message.isHalEnc?"1":"0", message.isPinned?"1":"0",
                         message.data==null?null:message.data.toString(),String.valueOf(message.v),String.valueOf(message.msgId)
@@ -2005,8 +2007,8 @@ public class HalChatGroupChats {
             try {
                 db.execSQL("INSERT OR IGNORE INTO `groupChatsMessages` (`msgId`, `chatId`, `fromId`, `message`, `encryptId`, `attachments`, `time`, `isDelete`, `answerMsg`," +
                                 " `commentMsg`, `type`, `soundMsg`, `dataBot`, `recordMic`, `isSended`, `isReceived`, `isHalEnc`, `data`, `shareId`, `pixelId`, `isPinned`, `v`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        new String[]{String.valueOf(msg.msgId),String.valueOf(msg.chatId),String.valueOf(msg.fromId),msg.message,
-                                HalChatFunctionsLib.bytesToHex(msg.encryptId),msg.attachments.toString(),String.valueOf(msg.time),msg.isDelete?"1":"0",
+                        new Object[]{String.valueOf(msg.msgId),String.valueOf(msg.chatId),String.valueOf(msg.fromId),msg.message,
+                                msg.encryptId,msg.attachments.toString(),String.valueOf(msg.time),msg.isDelete?"1":"0",
                                 String.valueOf(msg.answerMsg),String.valueOf(msg.commentMsg),String.valueOf(msg.type),msg.soundMsg,
                                 msg.dataBot,msg.recordMic,msg.isSended?"1":"0",msg.isReceived?"1":"0",msg.isHalEnc?"1":"0",msg.data==null?null:msg.data.toString(),
                                 String.valueOf(msg.shareId),String.valueOf(msg.pixelId),msg.isPinned?"1":"0",String.valueOf(msg.v)});
@@ -2024,6 +2026,29 @@ public class HalChatGroupChats {
         return false;
     }
 
+    /**
+     * encryptId из БД. Новые записи хранятся как BLOB, старые как hex в TEXT или INTEGER
+     *
+     * @param cur Курсор на строке groupChatsMessages или sendMessages
+     * @param column Номер столбца encryptId
+     * @return encryptId (8 байт, пустой, если его нет)
+     */
+    private static byte[] getEncryptIdFromCursor(Cursor cur,int column) {
+        switch(cur.getType(column)) {
+            case Cursor.FIELD_TYPE_BLOB:
+                return cur.getBlob(column);
+            case Cursor.FIELD_TYPE_NULL:
+                return new byte[0];
+            case Cursor.FIELD_TYPE_INTEGER:
+                return HalChatFunctionsLib.hexStringToByteArray(String.format(Locale.ROOT,"%016d",cur.getLong(column)));
+            case Cursor.FIELD_TYPE_FLOAT:
+                Log.w(TAG,"encryptId сохранён как REAL, восстановить нельзя: "+cur.getString(column));
+                return HalChatFunctionsLib.hexStringToByteArray(cur.getString(column));
+            default:
+                return HalChatFunctionsLib.hexStringToByteArray(cur.getString(column));
+        }
+    }
+
     @SuppressLint("Range")
     protected HCMessage getMessageFromCursor(Cursor msgCur, long userId) {
         long uid,msgId,chatId,fromId,time,answerMsg,commentMsg,pixelId,v;
@@ -2038,7 +2063,7 @@ public class HalChatGroupChats {
         chatId=msgCur.getLong(msgCur.getColumnIndex("chatId"));
         fromId=msgCur.getLong(msgCur.getColumnIndex("fromId"));
         message=msgCur.getString(msgCur.getColumnIndex("message"));
-        encryptId=HalChatFunctionsLib.hexStringToByteArray(msgCur.getString(msgCur.getColumnIndex("encryptId")));
+        encryptId=getEncryptIdFromCursor(msgCur,msgCur.getColumnIndex("encryptId"));
         try {
             attachments=new JSONArray(msgCur.getString(msgCur.getColumnIndex("attachments")));
         } catch (JSONException e) {
@@ -2266,7 +2291,7 @@ public class HalChatGroupChats {
                 try {
                     String text=decryptStoredMessageText(
                             cursor.getString(messageColumn),
-                            cursor.getString(encryptIdColumn),
+                            getEncryptIdFromCursor(cursor,encryptIdColumn),
                             cursor.getInt(isHalEncColumn)==1,
                             chatId,
                             cursor.getLong(fromIdColumn),
@@ -2306,7 +2331,7 @@ public class HalChatGroupChats {
      * Расшифровывает текст сообщения из БД для поискового индекса
      *
      * @param storedMessage Сообщение из БД (AES-GCM hex, HalEncryption hex или base64 v>=2)
-     * @param encryptIdHex encryptId сообщения (hex)
+     * @param encryptId encryptId сообщения
      * @param isHalEnc Сообщение зашифровано паролем чата (не локальным AES-GCM)
      * @param chatId UID чата
      * @param fromId ID отправителя
@@ -2315,14 +2340,10 @@ public class HalChatGroupChats {
      * @return Текст сообщения
      * @throws Exception Если расшифровать не удалось
      */
-    private String decryptStoredMessageText(String storedMessage, String encryptIdHex, boolean isHalEnc, long chatId, long fromId, long v, String password) throws Exception {
+    private String decryptStoredMessageText(String storedMessage, byte[] encryptId, boolean isHalEnc, long chatId, long fromId, long v, String password) throws Exception {
         if(storedMessage==null || storedMessage.isEmpty() || password==null) {
             return storedMessage;
         }
-
-        byte[] encryptId=encryptIdHex==null
-                ? new byte[0]
-                : HalChatFunctionsLib.hexStringToByteArray(encryptIdHex);
 
         if(isHalEnc&&v>=HalChatCipher.VER_MSG) {
             String text=HalChatCipher.decrypt(storedMessage,password,chatId,v,fromId,HalChatFunctionsLib.bytesToHex(encryptId));
@@ -2846,8 +2867,11 @@ public class HalChatGroupChats {
         prepareMessageForSend(msg);
         String encryptId=HalChatFunctionsLib.bytesToHex(msg.encryptId);
 
-        Cursor existing=db.rawQuery("SELECT `uid` FROM `sendMessages` WHERE `encryptId`=? LIMIT 1",new String[]{encryptId});
-        boolean alreadyQueued=existing.moveToFirst();
+        //BLOB - новые записи, hex - старые (TEXT или INTEGER)
+        SQLiteStatement existing=db.compileStatement("SELECT COUNT(*) FROM `sendMessages` WHERE `encryptId`=? OR `encryptId`=?");
+        existing.bindBlob(1,msg.encryptId);
+        existing.bindString(2,encryptId);
+        boolean alreadyQueued=existing.simpleQueryForLong()>0;
         existing.close();
         if(alreadyQueued) {
             checkSendMessages();
@@ -2864,8 +2888,8 @@ public class HalChatGroupChats {
         }
 
         db.execSQL("INSERT INTO `sendMessages` (`chatId`, `fromId`, `answerMsg`, `commentMsg`, `message`, `soundMsg`, `dataBot`, `recordMic`, `encryptId`," +
-                "`type`, `data`, `shareId`, `pixelId`, `v`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",new String[]{String.valueOf(msg.chatId),String.valueOf(msg.fromId),
-        String.valueOf(msg.answerMsg),String.valueOf(msg.commentMsg),msg.message,String.valueOf(msg.soundMsg),msg.dataBot,msg.recordMic,encryptId,
+                "`type`, `data`, `shareId`, `pixelId`, `v`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",new Object[]{String.valueOf(msg.chatId),String.valueOf(msg.fromId),
+        String.valueOf(msg.answerMsg),String.valueOf(msg.commentMsg),msg.message,String.valueOf(msg.soundMsg),msg.dataBot,msg.recordMic,msg.encryptId,
         String.valueOf(msg.type),queueData.toString(),String.valueOf(msg.shareId),String.valueOf(msg.pixelId),String.valueOf(msg.v)});
 
         checkSendMessages();
